@@ -18,7 +18,7 @@ class AboutDialog(wx.Dialog):
         # أيقونة البرنامج بحجم كبير فوق اسمه (زخرفة فقط، لا تؤثر على قارئ الشاشة)
         bundle = icons.app_icons()
         if bundle is not None:
-            icon = bundle.GetIcon(wx.Size(64, 64))
+            icon = bundle.GetIcon(self.FromDIP(wx.Size(64, 64)))
             if icon.IsOk():
                 bmp = wx.Bitmap(); bmp.CopyFromIcon(icon)
                 sizer.Add(wx.StaticBitmap(panel, bitmap=bmp), 0, wx.TOP | wx.ALIGN_CENTER_HORIZONTAL, 15)

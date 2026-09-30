@@ -154,13 +154,15 @@ class HFModelDetailsThread(threading.Thread):
 
 
 class DownloadDialog(wx.Frame):
-    def __init__(self, parent, i18n: LocalizationManager):
+    def __init__(self, parent, i18n: LocalizationManager, preselect=None):
         super().__init__(parent, title=i18n.get("dialog_download_model_title"), size=(680, 640), style=wx.DEFAULT_FRAME_STYLE ^ wx.MAXIMIZE_BOX)
         self.i18n = i18n
         i18n.apply_direction(self)
         widgets.fit_to_screen(self)
         icons.set_window_icon(self)
         self.parent_window = parent
+        # النموذج المقترح يكون محدداً مسبقاً في القائمة
+        self.preselect = ModelManager.to_repo_id(preselect) if preselect else None
         self.is_downloading = False
         self.download_thread = None
         self.current_expected_size = 0
@@ -232,10 +234,10 @@ class DownloadDialog(wx.Frame):
         info_sizer = wx.BoxSizer(wx.VERTICAL)
         info_sizer.Add(wx.StaticText(self.panel_info, label=self.i18n.get("lbl_model_details")), 0, wx.LEFT | wx.TOP, 5)
         self.info_list = wx.ListCtrl(self.panel_info, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES | wx.LC_VRULES)
-        self.info_list.InsertColumn(0, self.i18n.get("dl_col_prop"), width=160)
-        self.info_list.InsertColumn(1, self.i18n.get("dl_col_details"), width=470)
+        self.info_list.InsertColumn(0, self.i18n.get("dl_col_prop"), width=self.FromDIP(160))
+        self.info_list.InsertColumn(1, self.i18n.get("dl_col_details"), width=self.FromDIP(470))
         widgets.auto_fit_first_column(self.info_list, column=1, min_width=200)
-        self.info_list.SetMinSize((-1, 160))
+        self.info_list.SetMinSize((-1, self.info_list.FromDIP(160)))
         info_sizer.Add(self.info_list, 1, wx.EXPAND | wx.ALL, 5)
         self.panel_info.SetSizer(info_sizer)
 
@@ -247,10 +249,10 @@ class DownloadDialog(wx.Frame):
 
         prog_sizer.Add(wx.StaticText(self.panel_progress, label=self.i18n.get("lbl_download_progress")), 0, wx.LEFT | wx.TOP, 10)
         self.progress_list = wx.ListCtrl(self.panel_progress, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
-        self.progress_list.InsertColumn(0, self.i18n.get("dl_col_info"), width=180)
-        self.progress_list.InsertColumn(1, self.i18n.get("dl_col_data"), width=450)
+        self.progress_list.InsertColumn(0, self.i18n.get("dl_col_info"), width=self.FromDIP(180))
+        self.progress_list.InsertColumn(1, self.i18n.get("dl_col_data"), width=self.FromDIP(450))
         widgets.auto_fit_first_column(self.progress_list, column=1, min_width=200)
-        self.progress_list.SetMinSize((-1, 180))
+        self.progress_list.SetMinSize((-1, self.progress_list.FromDIP(180)))
         
         self.progress_list.InsertItem(0, self.i18n.get("dl_item_process"))
         self.progress_list.SetItem(0, 1, self.i18n.get("dl_val_waiting"))
@@ -374,7 +376,8 @@ class DownloadDialog(wx.Frame):
             
         model_names = [m["id"] for m in data]
         self.cb_model.AppendItems(model_names)
-        self.cb_model.SetSelection(0)
+        preselect = getattr(self, "preselect", None)
+        self.cb_model.SetSelection(model_names.index(preselect) if preselect in model_names else 0)
         self.on_model_select(None)
 
     def on_model_select(self, event):

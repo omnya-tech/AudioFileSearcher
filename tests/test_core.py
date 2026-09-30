@@ -204,3 +204,36 @@ def test_no_ampersand_in_texts():
     for lang in ("ar", "en"):
         d = json.load(open(os.path.join(BASE_DIR, "locales", f"{lang}.json"), encoding="utf-8"))
         assert [k for k, v in d.items() if "&" in v] == []
+
+
+def test_merge_and_split_segments():
+    from core import segments
+    w = lambda t, a, b: {"word": " " + t, "start": a, "end": b, "probability": 0.9}
+    a = ("", "بسم الله", 0.0, 2.0, [w("بسم", 0.0, 0.8), w("الله", 0.9, 2.0)])
+    b = ("", "الرحمن الرحيم", 2.0, 5.0, [w("الرحمن", 2.1, 3.4), w("الرحيم", 3.5, 5.0)])
+    m = segments.merge(a, b)
+    assert m[1] == "بسم الله الرحمن الرحيم" and (m[2], m[3]) == (0.0, 5.0) and len(m[4]) == 4
+
+    # التقسيم عند كلمة: الوقت من توقيت أول كلمة في الجزء الثاني
+    first, second = segments.split(m, len("بسم الله "))
+    assert (first[1], second[1]) == ("بسم الله", "الرحمن الرحيم")
+    assert first[3] == second[2] == 2.1 and len(first[4]) == 2
+
+    # بدون توقيتات كلمات: تقدير بنسبة طول النص
+    plain = ("", "abcd efgh", 10.0, 20.0, [])
+    p1, p2 = segments.split(plain, 4)
+    assert 13 < p1[3] < 16 and p2[2] == p1[3]
+    # في أول النص أو آخره: لا تقسيم
+    assert segments.split(plain, 0) is None and segments.split(plain, len(plain[1])) is None
+
+
+def test_word_export_direction_follows_text_not_interface(tmp_path):
+    """النص العربي من اليمين لليسار في الوورد حتى لو كانت الواجهة إنجليزية، والإنجليزي العكس"""
+    import docx
+    from core import exporters
+    segs = [("", "بسم الله الرحمن الرحيم", 0.0, 2.0, []), ("", "Hello world", 2.0, 3.0, [])]
+    path = tmp_path / "out.docx"
+    exporters.export(str(path), "docx", segs, title="x")
+    paras = [p for p in docx.Document(str(path)).paragraphs if p.text.strip() and p.text != "x"]
+    has_bidi = [p._p.pPr is not None and p._p.pPr.find(docx.oxml.ns.qn("w:bidi")) is not None for p in paras]
+    assert has_bidi == [True, False]

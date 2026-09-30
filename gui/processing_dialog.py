@@ -42,7 +42,7 @@ class ProcessingDialog(wx.Dialog):
             return
         px, py = parent.GetScreenPosition()
         pw, _ = parent.GetSize()
-        self.SetPosition((px + (pw - self.GetSize().width) // 2, py + 60))
+        self.SetPosition((px + (pw - self.GetSize().width) // 2, py + self.FromDIP(60)))
 
     def on_announce_progress(self, event):
         if hasattr(self.parent_win, 'on_check_progress'):
@@ -65,16 +65,16 @@ class ProcessingDialog(wx.Dialog):
         # عمود واحد عريض، وكل سطر جملة كاملة: لا يُقص النص بصرياً، وقارئ الشاشة يقرأ السطر كاملاً.
         # السطر الثاني (عليه التركيز) يتغير اسمه مع التقدم، فينطقه قارئ الشاشة تلقائياً
         self.list_ctrl = wx.ListCtrl(self.panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_NO_HEADER)
-        self.list_ctrl.InsertColumn(0, self.i18n.get("proc_col_status"), width=500)
+        self.list_ctrl.InsertColumn(0, self.i18n.get("proc_col_status"), width=self.FromDIP(500))
         self.list_ctrl.InsertItem(0, f"{self.i18n.get('proc_item_file')} {self.i18n.get('proc_val_waiting')}")
         self.list_ctrl.InsertItem(1, f"{self.i18n.get('proc_item_percent')} 0% - {self.i18n.get('status_init_engine').replace('...', '')}")
         self._last_announced = None
-        self.list_ctrl.SetMinSize((-1, 52))
+        self.list_ctrl.SetMinSize((-1, self.list_ctrl.FromDIP(52)))
         main_sizer.Add(self.list_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 15)
         
         # 3. شريط التقدم المرئي (Gauge)
         self.gauge = wx.Gauge(self.panel, range=100, style=wx.GA_HORIZONTAL | wx.GA_SMOOTH)
-        self.gauge.SetMinSize((-1, 20))
+        self.gauge.SetMinSize((-1, self.gauge.FromDIP(20)))
         main_sizer.Add(self.gauge, 0, wx.EXPAND | wx.ALL, 15)
         
         main_sizer.AddStretchSpacer(1)

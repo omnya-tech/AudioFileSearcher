@@ -39,7 +39,7 @@ def readonly_note(parent, text):
     """ملاحظة نصية تُقرأ بقارئ الشاشة: حقل للقراءة فقط بدون إطار (يصل إليه Tab، عكس النص الثابت)"""
     ctrl = wx.TextCtrl(parent, value=text, style=wx.TE_READONLY | wx.BORDER_NONE | wx.TE_MULTILINE | wx.TE_NO_VSCROLL)
     ctrl.SetBackgroundColour(parent.GetBackgroundColour())
-    ctrl.SetMinSize((-1, 40))
+    ctrl.SetMinSize((-1, ctrl.FromDIP(40)))
     return ctrl
 
 
@@ -79,7 +79,7 @@ class SettingsDialog(wx.Dialog):
         self.notebook.AddPage(self.page_appearance, self.i18n.get("tab_appearance"))
         self.i18n.fix_notebook(self.notebook)
         # صفحات الإعدادات فاتحة دائماً، فالأيقونات بألوان المظهر الفاتح
-        self._tab_images = wx.ImageList(16, 16)
+        self._tab_images = wx.ImageList(icons.px(16), icons.px(16))
         for i, name in enumerate(("engine", "advanced", "save", "dictionary", "appearance")):
             self._tab_images.Add(icons.get(name, 16, theme="light"))
         self.notebook.SetImageList(self._tab_images)
@@ -194,14 +194,7 @@ class SettingsDialog(wx.Dialog):
 
     def on_auto_suggest(self, event):
         ram_gb = psutil.virtual_memory().total / (1024**3)
-        if ram_gb >= 12:
-            suggested_model = "large-v3"
-        elif ram_gb >= 6:
-            suggested_model = "deepdml/faster-whisper-large-v3-turbo-ct2"
-        elif ram_gb >= 4:
-            suggested_model = "medium"
-        else:
-            suggested_model = "small"
+        suggested_model = ModelManager.recommend_model(ram_gb)
 
         self.cb_model.SetStringSelection(suggested_model)
         self.update_model_state()
@@ -246,7 +239,7 @@ class SettingsDialog(wx.Dialog):
         sizer.Add(self.chk_word_ts, 0, wx.ALL, 5)
 
         sizer.Add(wx.StaticText(page, label=self.i18n.get("lbl_initial_prompt")), 0, wx.ALL, 5)
-        self.txt_prompt = wx.TextCtrl(page, style=wx.TE_MULTILINE, size=(-1, 70))
+        self.txt_prompt = wx.TextCtrl(page, style=wx.TE_MULTILINE, size=(-1, page.FromDIP(70)))
         sizer.Add(self.txt_prompt, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         page.SetSizer(sizer)
@@ -480,7 +473,11 @@ class SettingsDialog(wx.Dialog):
         if old_font != new_font and hasattr(self.parent_window, 'apply_font_size'): self.parent_window.apply_font_size(new_font)
         if old_lang != new_lang: self.i18n.set_language(new_lang)
 
-        wx.MessageBox(self.i18n.get("msg_settings_saved"), self.i18n.get("dialog_success_title"), wx.ICON_INFORMATION)
+        msg = self.i18n.get("msg_settings_saved")
+        if old_theme != new_theme:
+            # النافذة الرئيسية تتغير فوراً، وباقي النوافذ والقوائم بعد إعادة التشغيل (قيد في ويندوز)
+            msg += "\n\n" + self.i18n.get("msg_theme_restart")
+        wx.MessageBox(msg, self.i18n.get("dialog_success_title"), wx.ICON_INFORMATION)
         self.EndModal(wx.ID_OK)
 
     def on_reset(self, event):

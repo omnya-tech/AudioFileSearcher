@@ -32,5 +32,6 @@
     "word_timestamps": true,
     "no_speech_threshold": 0.6,
     "threads": 0,
-    "initial_prompt": ""
+    "initial_prompt": "",
+    "play_sentence_only": false
 }

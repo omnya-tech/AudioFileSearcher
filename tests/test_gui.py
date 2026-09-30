@@ -253,3 +253,121 @@ def test_window_geometry_saved_and_restored(main_window, settings, i18n):
         assert tuple(second.GetSize()) == (820, 560)
     finally:
         second.Destroy()
+
+
+def test_screen_scaling(main_window, monkeypatch):
+    """على شاشة مكبّرة 150%: الأيقونات أكبر، ومقاس النافذة يُضرب في النسبة ثم لا يتجاوز الشاشة"""
+    from gui import icons, widgets
+    monkeypatch.setattr(icons, "scale", lambda: 1.5)
+    assert icons.px(16) == 24
+    assert icons.get("save", 16, theme="light").GetWidth() == 24
+
+    frame = wx.Frame(None, size=(400, 300))
+    monkeypatch.setattr(frame, "FromDIP", lambda v: wx.Size(int(v[0] * 1.5), int(v[1] * 1.5)) if not isinstance(v, int) else int(v * 1.5))
+    widgets.fit_to_screen(frame)
+    assert tuple(frame.GetSize()) == (600, 450)
+
+    huge = wx.Frame(None, size=(5000, 5000))
+    widgets.fit_to_screen(huge)
+    area = wx.Display(0).GetClientArea()
+    assert huge.GetSize().width <= area.width and huge.GetSize().height <= area.height
+    frame.Destroy(); huge.Destroy()
+
+
+def test_no_model_guides_user_instead_of_silent_download(main_window, monkeypatch, tmp_path):
+    from core.model_manager import ModelManager
+    assert ModelManager.recommend_model(16) == ModelManager.RECOMMENDED
+    assert ModelManager.recommend_model(3) == "small"
+
+    monkeypatch.setattr(ModelManager, "has_usable_model", staticmethod(lambda s: False))
+    opened = []
+    monkeypatch.setattr(main_window, "on_open_download_dialog", lambda e, preselect=None: opened.append(preselect))
+    answers = iter([wx.ID_NO, wx.ID_YES])
+    monkeypatch.setattr(wx.MessageDialog, "ShowModal", lambda self: next(answers))
+
+    audio = tmp_path / "a.mp3"; audio.write_bytes(b"x")
+    main_window.set_single_file(str(audio))
+    main_window.on_process(None)                     # "لاحقاً": لا تفريغ ولا تحميل صامت
+    assert main_window.transcription_thread is None and opened == []
+    main_window.on_process(None)                     # "فتح مدير النماذج" بالنموذج المقترح
+    assert main_window.transcription_thread is None and opened == [ModelManager.recommend_model()]
+
+
+def test_merge_and_split_in_window(main_window, monkeypatch):
+    import gui.main_window as mw
+    load_segments(main_window)
+    main_window.result_list.Select(0); main_window.result_list.Focus(0)
+    main_window.on_merge_next(None)
+    assert len(main_window.all_segments) == 1 and main_window.unsaved_edits
+    assert main_window.all_segments[0][1] == "بسم الله الرحمن الرحيم ولا الظالم"
+
+    class SplitDialog:
+        def __init__(self, *a, **k):
+            self.txt = type("T", (), {"GetValue": lambda s: "بسم الله الرحمن الرحيم ولا الظالم"})()
+            self.split_pos = len("بسم الله الرحمن الرحيم ")
+        def ShowModal(self): return mw.ID_SPLIT
+        def Destroy(self): pass
+    monkeypatch.setattr(mw, "EditSegmentDialog", SplitDialog)
+    main_window.result_list.Select(0)
+    main_window.on_edit_segment(None)
+    assert [s[1] for s in main_window.all_segments] == ["بسم الله الرحمن الرحيم", "ولا الظالم"]
+    # بيانات الاختبار فيها توقيتات لبعض الكلمات فقط، فيُقدَّر الوقت بنسبة طول النص (الحالة بتوقيتات كاملة مختبرة في test_core)
+    first, second = main_window.all_segments
+    assert first[3] == second[2] and 0.0 < second[2] < 6.0
+
+
+def test_player_stops_at_sentence_end(main_window, tmp_path, monkeypatch):
+    """تشغيل جملة واحدة: توقف مؤقت عند نهايتها"""
+    player = main_window.audio_player
+    src = tmp_path / "tone.wav"
+    tone = (np.sin(np.linspace(0, 440 * 2 * np.pi * 4, 16000 * 4)) * 8000).astype(np.int16)
+    with wave.open(str(src), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000); w.writeframes(tone.tobytes())
+    ok, err = player.load_and_play(str(src), 1.0, 2.0)
+    if not ok:
+        pytest.skip(f"no audio device: {err}")
+    assert player.duration == pytest.approx(4.0, abs=0.1) and player.slider.GetMax() == 4
+    monkeypatch.setattr(player, "position", lambda: 2.05)
+    player._on_tick(None)
+    assert not player.is_playing and player._stop_at is None
+    player.on_stop(None)
+
+
+def _controls(win):
+    for child in win.GetChildren():
+        yield child
+        yield from _controls(child)
+
+
+@pytest.mark.parametrize("lang", ["ar", "en"])
+def test_no_control_is_cut_off(main_window, i18n, settings, lang):
+    """كل زر وخانة ظاهرة بالكامل داخل نافذتها، في اللغتين (النصوص الإنجليزية أطول أحياناً)"""
+    from gui.settings_dialog import SettingsDialog
+    from gui.custom_dict_dialog import CustomDictDialog
+    from gui.history_dialog import HistoryDialog
+    from gui.edit_segment_dialog import EditSegmentDialog
+    from gui.processing_dialog import ProcessingDialog
+    from gui.about_dialog import AboutDialog
+    from gui.report_dialog import ReportDialog
+    i18n.set_language(lang)
+    windows = [SettingsDialog(main_window, i18n, settings), CustomDictDialog(main_window, i18n, settings),
+               HistoryDialog(main_window, i18n), EditSegmentDialog(main_window, i18n, "00:00 - 00:02", "نص", lambda: None),
+               ProcessingDialog(main_window, i18n), AboutDialog(main_window, i18n), ReportDialog(main_window, i18n, {})]
+    problems = []
+    try:
+        for win in [main_window] + windows:
+            win.Show(); win.Layout(); wx.Yield()
+            # مستطيل النافذة ومستطيلات عناصرها بنفس الطريقة (ClientToScreen ينعكس في النوافذ من اليمين لليسار)
+            area = win.GetScreenRect()
+            for c in _controls(win):
+                if isinstance(c, (wx.Button, wx.CheckBox, wx.Choice)) and c.IsShownOnScreen():
+                    r = c.GetScreenRect()
+                    if not area.Contains(r):
+                        problems.append(f"{type(win).__name__}: {c.GetLabel() or type(c).__name__}")
+                    if isinstance(c, (wx.Button, wx.CheckBox)) and r.width + 2 < c.GetBestSize().width:
+                        problems.append(f"{type(win).__name__}: cut text «{c.GetLabel()}»")
+    finally:
+        for w in windows:
+            w.Destroy()
+        i18n.set_language("ar")
+    assert problems == []

@@ -12,6 +12,27 @@ class ModelManager:
         """مجلد النماذج الأساسي (للتحميل) + مجلدات إضافية للقراءة فقط، مثل مجلد models بجانب البرنامج"""
         return [ModelManager.get_models_dir()] + [d for d in EXTRA_MODEL_DIRS if os.path.isdir(d)]
 
+    RECOMMENDED = "deepdml/faster-whisper-large-v3-turbo-ct2"
+
+    @staticmethod
+    def recommend_model(ram_gb=None):
+        """
+        النموذج المناسب للجهاز. turbo دقته قريبة من large-v3 وأسرع منه بحوالي الضعف على المعالج،
+        فهو الأنسب لأي جهاز فيه 4 جيجا ذاكرة أو أكثر. الأجهزة الأضعف: small.
+        """
+        if ram_gb is None:
+            import psutil
+            ram_gb = psutil.virtual_memory().total / (1024 ** 3)
+        return ModelManager.RECOMMENDED if ram_gb >= 4 else "small"
+
+    @staticmethod
+    def has_usable_model(settings):
+        """هل يمكن التفريغ الآن بدون تحميل؟ (النموذج المختار موجود، أو مجلد نموذج مخصص صالح)"""
+        custom = settings.get("local_model_path", "") or ""
+        if custom and ModelManager.is_valid_model_dir(custom):
+            return True
+        return ModelManager.find_local_model(settings.get("model_size", ModelManager.RECOMMENDED)) is not None
+
     @staticmethod
     def to_repo_id(model_id):
         """تحويل الاسم المختصر (مثل large-v3) إلى اسم المستودع الكامل"""

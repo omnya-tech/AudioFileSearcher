@@ -89,9 +89,9 @@ class CrossFileSearchPanel(wx.Panel):
 
     def _insert_columns(self):
         # النص أولاً لأن قارئ الشاشة ينطق العمود الأول قبل غيره
-        self.list_ctrl.InsertColumn(0, self.i18n.get("col_text_snippet"), width=500)
-        self.list_ctrl.InsertColumn(1, self.i18n.get("col_file_name"), width=200)
-        self.list_ctrl.InsertColumn(2, self.i18n.get("col_time"), width=150)
+        self.list_ctrl.InsertColumn(0, self.i18n.get("col_text_snippet"), width=self.FromDIP(500))
+        self.list_ctrl.InsertColumn(1, self.i18n.get("col_file_name"), width=self.FromDIP(200))
+        self.list_ctrl.InsertColumn(2, self.i18n.get("col_time"), width=self.FromDIP(150))
         widgets.fit_first_column(self.list_ctrl)
 
     def refresh_ui_texts(self):

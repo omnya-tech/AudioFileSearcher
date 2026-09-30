@@ -330,5 +330,19 @@
   "n_results_one": "1 result",
   "n_results_many": "{n} results",
   "n_lines_one": "1 line",
-  "n_lines_many": "{n} lines"
+  "n_lines_many": "{n} lines",
+  "msg_no_model_startup": "Welcome! To transcribe, the program needs an AI model, downloaded once from the internet; after that it works offline.\n\nRecommended for this computer: {model}\n\nOpen the model manager now to download it?",
+  "msg_no_model_before_start": "The selected model is not on this computer yet and must be downloaded first (only once).\n\nRecommended for this computer: {model}\n\nOpen the model manager to download it?",
+  "btn_open_model_manager": "Open model manager",
+  "lbl_playback_position": "Position:",
+  "menu_seek_back": "Back 5 seconds",
+  "menu_seek_forward": "Forward 5 seconds",
+  "menu_sentence_only": "Play sentence only (stop at its end)",
+  "menu_merge_next": "Merge with next sentence",
+  "btn_split_here": "Split at cursor",
+  "msg_nothing_to_merge": "This is the last sentence; there is nothing after it to merge with.",
+  "msg_split_invalid": "Place the cursor where you want to split the sentence (not at its start or end).",
+  "status_segment_split": "Sentence split in two. Remember to save the results (Ctrl+S).",
+  "status_segments_merged": "Sentences merged. Remember to save the results (Ctrl+S).",
+  "msg_theme_restart": "The theme changed in the main window; it applies to all windows and menus after restarting the program."
 }

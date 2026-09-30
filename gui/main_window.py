@@ -1,16 +1,16 @@
 import wx
 import pygame
 import os
-import json
 import subprocess
 import platform
 from core.i18n import LocalizationManager
 from core.settings import SettingsManager
 from core.audio_processor import TranscriptionThread, EVT_RESULT, WEAK_WORD_THRESHOLD
 from core.cross_file_search import AUDIO_EXTENSIONS, parse_subtitles, find_audio_for
-from core.time_utils import format_range, format_srt_time, format_clock
+from core.time_utils import format_range, format_clock
 from core.logger import log_error
-from core import recovery
+from core import recovery, exporters
+from core.model_manager import ModelManager
 import time
 from gui.settings_dialog import SettingsDialog
 from gui.download_dialog import DownloadDialog
@@ -21,16 +21,18 @@ from gui.custom_dict_dialog import CustomDictDialog
 from gui.audio_player import AudioPlayerPanel
 from gui.search_panel import CrossFileSearchPanel
 from gui.processing_dialog import ProcessingDialog
-from gui.edit_segment_dialog import EditSegmentDialog
+from gui.edit_segment_dialog import EditSegmentDialog, ID_SPLIT
+from core import segments as seg_ops
 from gui import icons, widgets
 
-# علامة BOM في أول ملفات النص والترجمة: بدونها تعرض بعض المشغلات والتلفزيونات القديمة العربي كرموز غريبة
-TEXT_EXPORT_ENCODING = "utf-8-sig"
+
+# مقدار التقديم والترجيع بـ Alt+الأسهم
+SEEK_SECONDS = 5
 
 # كل كم ثانية يُحفظ التقدم على القرص أثناء التفريغ
 RECOVERY_SAVE_INTERVAL = 5
 
-EXPORT_FORMATS = ["srt", "txt", "vtt", "json", "docx"]
+EXPORT_FORMATS = exporters.FORMATS
 # اسم كل صيغة يُترجم حسب لغة الواجهة (المفتاح في ملفات اللغة: wc_<الصيغة>)
 EXPORT_FORMAT_KEYS = {"srt": "wc_srt", "txt": "wc_txt", "vtt": "wc_vtt", "json": "wc_json", "docx": "wc_docx"}
 
@@ -174,7 +176,11 @@ class MainWindow(wx.Frame):
             "mi_exit": self.i18n.get("menu_exit") + "\tAlt+F4",
             "mi_focus_filter": self.i18n.get("menu_focus_search") + "\tCtrl+F",
             "mi_edit_segment": self.i18n.get("menu_edit_segment") + "\tF2",
+            "mi_merge_next": self.i18n.get("menu_merge_next") + "\tCtrl+J",
             "mi_pause_audio": self.i18n.get("menu_pause_audio") + "\tF3",
+            "mi_seek_back": self.i18n.get("menu_seek_back") + "\tAlt+Left",
+            "mi_seek_forward": self.i18n.get("menu_seek_forward") + "\tAlt+Right",
+            "mi_sentence_only": self.i18n.get("menu_sentence_only"),
             "mi_stop_audio": self.i18n.get("menu_stop_audio") + "\tF4",
             "mi_check_progress": self.i18n.get("menu_check_progress") + "\tCtrl+I",
             "mi_history": self.i18n.get("menu_history") + "\tCtrl+H",
@@ -200,8 +206,14 @@ class MainWindow(wx.Frame):
         view_menu = wx.Menu()
         self.mi_focus_filter = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_focus_filter"], "search")
         self.mi_edit_segment = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_edit_segment"], "edit")
+        self.mi_merge_next = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_merge_next"], "merge")
         view_menu.AppendSeparator()
         self.mi_pause_audio = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_pause_audio"], "pause")
+        self.mi_seek_back = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_seek_back"], "back")
+        self.mi_seek_forward = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_seek_forward"], "forward")
+        # خيار دائم: Enter على سطر يشغّل الجملة ويتوقف في آخرها (للمراجعة)، أو يكمل لآخر الملف
+        self.mi_sentence_only = view_menu.AppendCheckItem(wx.ID_ANY, labels["mi_sentence_only"])
+        self.mi_sentence_only.Check(self.settings.get("play_sentence_only", True))
         self.mi_stop_audio = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_stop_audio"], "stop")
         self.mi_check_progress = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_check_progress"], "progress")
         view_menu.AppendSeparator()
@@ -230,7 +242,11 @@ class MainWindow(wx.Frame):
         self.Bind(wx.EVT_MENU, self.open_settings, self.mi_settings)
         self.Bind(wx.EVT_MENU, self.on_focus_filter, self.mi_focus_filter)
         self.Bind(wx.EVT_MENU, self.on_edit_segment, self.mi_edit_segment)
+        self.Bind(wx.EVT_MENU, self.on_merge_next, self.mi_merge_next)
         self.Bind(wx.EVT_MENU, lambda e: self.audio_player.on_play(None), self.mi_pause_audio)
+        self.Bind(wx.EVT_MENU, lambda e: self.audio_player.seek_relative(-SEEK_SECONDS), self.mi_seek_back)
+        self.Bind(wx.EVT_MENU, lambda e: self.audio_player.seek_relative(SEEK_SECONDS), self.mi_seek_forward)
+        self.Bind(wx.EVT_MENU, lambda e: self.settings.set("play_sentence_only", self.mi_sentence_only.IsChecked()), self.mi_sentence_only)
         self.Bind(wx.EVT_MENU, self.on_stop_audio, self.mi_stop_audio)
         self.Bind(wx.EVT_MENU, self.on_check_progress, self.mi_check_progress)
         self.Bind(wx.EVT_MENU, self.on_open_download_dialog, self.mi_download_model)
@@ -359,10 +375,10 @@ class MainWindow(wx.Frame):
 
     def _insert_result_columns(self):
         # عمود النص أولاً: قارئ الشاشة ينطق العمود الأول عند التنقل بالأسهم، فيُسمع الكلام قبل التوقيت
-        self.result_list.InsertColumn(0, self.i18n.get("list_header_text"), width=600)
-        self.result_list.InsertColumn(1, self.i18n.get("list_header_time"), width=130)
+        self.result_list.InsertColumn(0, self.i18n.get("list_header_text"), width=self.FromDIP(600))
+        self.result_list.InsertColumn(1, self.i18n.get("list_header_time"), width=self.FromDIP(130))
         # الحالة مكتوبة نصاً (وليس باللون فقط) حتى يسمعها مستخدم قارئ الشاشة
-        self.result_list.InsertColumn(2, self.i18n.get("list_header_review"), width=220)
+        self.result_list.InsertColumn(2, self.i18n.get("list_header_review"), width=self.FromDIP(220))
         widgets.fit_first_column(self.result_list)
 
     def setup_accessibility(self):
@@ -405,9 +421,9 @@ class MainWindow(wx.Frame):
         dlg.ShowModal()
         dlg.Destroy()
 
-    def on_open_download_dialog(self, event):
+    def on_open_download_dialog(self, event, preselect=None):
         if not getattr(self, 'download_dialog', None):
-            self.download_dialog = DownloadDialog(self, self.i18n)
+            self.download_dialog = DownloadDialog(self, self.i18n, preselect=preselect)
             self.download_dialog.Show()
         else:
             if self.download_dialog.IsIconized(): self.download_dialog.Restore()
@@ -587,6 +603,7 @@ class MainWindow(wx.Frame):
         if not self.audio_path and not self.batch_queue: return
         if self.transcription_thread_running(): return
         if not self.confirm_discard_edits(): return
+        if not self.ensure_model_ready(): return
         if not self.is_batch_mode and not os.path.isfile(self.audio_path or ""):
             wx.MessageBox(self.i18n.get("msg_audio_not_found"), self.i18n.get("dialog_error_title"), wx.ICON_ERROR)
             return
@@ -684,6 +701,23 @@ class MainWindow(wx.Frame):
         self.Raise()
         # ويندوز قد يمنع برنامجاً من أخذ التركيز بنفسه، فنومض زره في شريط المهام على الأقل
         self.RequestUserAttention()
+
+    def ensure_model_ready(self, at_startup=False):
+        """
+        لو لا يوجد نموذج على الجهاز: شرح الموقف وعرض فتح مدير النماذج بالنموذج المقترح محدداً،
+        بدلاً من أن يبدأ التفريغ في تحميل 1.5 جيجابايت بصمت. ترجع True لو النموذج جاهز.
+        """
+        if ModelManager.has_usable_model(self.settings):
+            return True
+        recommended = ModelManager.recommend_model()
+        key = "msg_no_model_startup" if at_startup else "msg_no_model_before_start"
+        dlg = wx.MessageDialog(self, self.i18n.get(key, model=recommended), self.i18n.get("dialog_info_title"),
+                               wx.YES_NO | wx.YES_DEFAULT | wx.ICON_INFORMATION)
+        dlg.SetYesNoLabels(self.i18n.get("btn_open_model_manager"), self.i18n.get("btn_later"))
+        if dlg.ShowModal() == wx.ID_YES:
+            self.on_open_download_dialog(None, preselect=recommended)
+        dlg.Destroy()
+        return False
 
     def check_pending_recovery(self):
         """عند فتح البرنامج: لو فيه تفريغ لم يكتمل (إغلاق مفاجئ أو إلغاء) نعرض استكماله"""
@@ -982,9 +1016,11 @@ class MainWindow(wx.Frame):
         menu = wx.Menu()
         mi_play = icons.menu_item(menu, wx.ID_ANY, self.i18n.get("menu_play_segment"), "play")
         mi_edit = icons.menu_item(menu, wx.ID_ANY, self.i18n.get("menu_edit_segment") + "\tF2", "edit")
+        mi_merge = icons.menu_item(menu, wx.ID_ANY, self._menu_labels()["mi_merge_next"], "merge")
         mi_play.Enable(bool(self._can_play()))
-        self.Bind(wx.EVT_MENU, lambda e: self._play(self.audio_path, self.all_segments[seg_index][2]), mi_play)
+        self.Bind(wx.EVT_MENU, lambda e: self._play(self.audio_path, *self.all_segments[seg_index][2:4]), mi_play)
         self.Bind(wx.EVT_MENU, self.on_edit_segment, mi_edit)
+        self.Bind(wx.EVT_MENU, self.on_merge_next, mi_merge)
         self.result_list.PopupMenu(menu)
         menu.Destroy()
 
@@ -998,9 +1034,17 @@ class MainWindow(wx.Frame):
                 wx.MessageBox(self.i18n.get("msg_select_segment_first"), self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
             return
         seg = self.all_segments[seg_index]
-        play = (lambda: self._play(self.audio_path, seg[2])) if self._can_play() else None
+        play = (lambda: self._play(self.audio_path, seg[2], seg[3])) if self._can_play() else None
         dlg = EditSegmentDialog(self, self.i18n, format_range(seg[2], seg[3]), seg[1], play)
-        if dlg.ShowModal() == wx.ID_OK:
+        result = dlg.ShowModal()
+        if result == ID_SPLIT:
+            # التقسيم يطبق على النص كما هو في مربع الكتابة (بما فيه أي تعديل لم يُحفظ بعد)
+            edited = (seg[0], dlg.txt.GetValue(), seg[2], seg[3], seg[4] if dlg.txt.GetValue() == seg[1] else [])
+            parts = seg_ops.split(edited, dlg.split_pos)
+            if parts:
+                self.all_segments[seg_index:seg_index + 1] = list(parts)
+                self._after_structure_change(seg_index, "status_segment_split")
+        elif result == wx.ID_OK:
             new_text = dlg.get_text()
             if new_text and new_text != seg[1]:
                 # توقيتات الكلمات القديمة لم تعد تطابق النص، والمراجعة البشرية تلغي علامة الشك
@@ -1009,6 +1053,35 @@ class MainWindow(wx.Frame):
                 self.unsaved_edits = True
                 self.status_bar.SetStatusText(self.i18n.get("status_segment_edited"))
         dlg.Destroy()
+        self.result_list.SetFocus()
+
+    def on_merge_next(self, event):
+        """دمج السطر المحدد مع الجملة التي تليه في التفريغ"""
+        if self.transcription_thread_running():
+            return
+        row, seg_index = self._selected_segment_index()
+        if seg_index is None:
+            if self.all_segments:
+                wx.MessageBox(self.i18n.get("msg_select_segment_first"), self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
+            return
+        if seg_index + 1 >= len(self.all_segments):
+            wx.MessageBox(self.i18n.get("msg_nothing_to_merge"), self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
+            return
+        merged = seg_ops.merge(self.all_segments[seg_index], self.all_segments[seg_index + 1])
+        self.all_segments[seg_index:seg_index + 2] = [merged]
+        self._after_structure_change(seg_index, "status_segments_merged")
+
+    def _after_structure_change(self, seg_index, status_key):
+        """بعد تقسيم أو دمج: إعادة عرض القائمة (مع البحث الحالي) وإبقاء التحديد على نفس الجملة"""
+        self.unsaved_edits = True
+        self.on_filter_results(None)
+        for row in range(self.result_list.GetItemCount()):
+            if self.result_list.GetItemData(row) == seg_index:
+                self.result_list.Select(row)
+                self.result_list.Focus(row)
+                self.result_list.EnsureVisible(row)
+                break
+        self.status_bar.SetStatusText(self.i18n.get(status_key))
         self.result_list.SetFocus()
 
     def confirm_discard_edits(self):
@@ -1029,14 +1102,14 @@ class MainWindow(wx.Frame):
         return False
 
     # ------------------------------------------------------------------ التشغيل
-    def _play(self, audio_path, start_time):
+    def _play(self, audio_path, start_time, end_time=None):
         if not audio_path or not os.path.isfile(audio_path):
             wx.MessageBox(self.i18n.get("msg_audio_not_found"), self.i18n.get("dialog_error_title"), wx.ICON_WARNING)
             return
         if not self.audio_player.IsShown():
             self.audio_player.Show()
             self.panel.Layout()
-        ok, error = self.audio_player.load_and_play(audio_path, start_time or 0)
+        ok, error = self.audio_player.load_and_play(audio_path, start_time or 0, end_time)
         if ok:
             self.status_bar.SetStatusText(self.i18n.get("status_playing"))
         else:
@@ -1046,7 +1119,8 @@ class MainWindow(wx.Frame):
         if not self._can_play(): return
         seg_index = self.result_list.GetItemData(event.GetIndex())
         if 0 <= seg_index < len(self.all_segments):
-            self._play(self.audio_path, self.all_segments[seg_index][2])
+            seg = self.all_segments[seg_index]
+            self._play(self.audio_path, seg[2], seg[3] if self.mi_sentence_only.IsChecked() else None)
 
     def on_stop_audio(self, event):
         self.audio_player.on_stop(None)
@@ -1084,10 +1158,8 @@ class MainWindow(wx.Frame):
         dlg.Destroy()
 
     def save_as(self, path, fmt, show_msg=True):
-        writers = {"txt": self._write_txt, "vtt": self._write_vtt, "json": self._write_json,
-                   "docx": self._write_docx, "srt": self._write_srt}
         try:
-            writers.get(fmt, self._write_srt)(path)
+            exporters.export(path, fmt, self.all_segments, title=self.i18n.get("app_name"))
         except ImportError:
             wx.MessageBox(self.i18n.get("msg_docx_error"), self.i18n.get("dialog_error_title"), wx.ICON_ERROR)
             return False
@@ -1099,57 +1171,6 @@ class MainWindow(wx.Frame):
         if show_msg:
             wx.MessageBox(self.i18n.get("msg_export_success"), self.i18n.get("dialog_success_title"), wx.ICON_INFORMATION)
         return True
-
-    def _write_txt(self, path):
-        with open(path, 'w', encoding=TEXT_EXPORT_ENCODING) as f:
-            f.write("\n\n".join(item[1].strip() for item in self.all_segments))
-
-    def _write_srt(self, path):
-        with open(path, 'w', encoding=TEXT_EXPORT_ENCODING) as f:
-            for i, item in enumerate(self.all_segments, 1):
-                f.write(f"{i}\n{format_srt_time(item[2])} --> {format_srt_time(item[3])}\n{item[1]}\n\n")
-
-    def _write_vtt(self, path):
-        with open(path, 'w', encoding=TEXT_EXPORT_ENCODING) as f:
-            f.write("WEBVTT\n\n")
-            for i, item in enumerate(self.all_segments, 1):
-                f.write(f"{i}\n{format_srt_time(item[2], '.')} --> {format_srt_time(item[3], '.')}\n{item[1]}\n\n")
-
-    def _write_json(self, path):
-        data = []
-        for item in self.all_segments:
-            seg_data = {"start": item[2], "end": item[3], "text": item[1]}
-            if len(item) > 4 and item[4]: seg_data["words"] = item[4]
-            data.append(seg_data)
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-
-    def _write_docx(self, path):
-        import docx
-        from docx.shared import Pt, RGBColor
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-        from docx.oxml import OxmlElement
-
-        doc = docx.Document()
-        is_rtl = self.i18n.language == "ar"
-        heading = doc.add_heading(self.i18n.get("app_name"), 0)
-        heading.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-        for item in self.all_segments:
-            p = doc.add_paragraph()
-            p.paragraph_format.space_after = Pt(12)
-            if is_rtl:
-                p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-                # اتجاه الفقرة من اليمين لليسار حتى يظهر النص العربي مرتباً في الوورد
-                p._p.get_or_add_pPr().append(OxmlElement('w:bidi'))
-            run_time = p.add_run(f"[{format_range(item[2], item[3])}]\n")
-            run_time.bold = True
-            run_time.font.color.rgb = RGBColor(100, 100, 100)
-            run_text = p.add_run(item[1])
-            if is_rtl:
-                run_text.font.rtl = True
-
-        doc.save(path)
 
     # ------------------------------------------------------------------ الإغلاق
     def on_exit(self, event):

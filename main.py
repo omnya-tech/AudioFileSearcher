@@ -6,6 +6,20 @@ import getpass
 from core.paths import DATA_DIR, LOGS_DIR, MODELS_DIR, ensure_dir, ensure_std_streams
 ensure_std_streams()
 
+# وضوح النصوص على الشاشات المكبّرة (125% و150%...): نعلن لويندوز أن البرنامج يضبط نفسه لكل شاشة،
+# وإلا يكبّره ويندوز كصورة فيظهر مشوشاً. يجب أن يحدث هذا قبل إنشاء أي نافذة
+import ctypes
+try:
+    ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))  # لكل شاشة على حدة (الإصدار 2)
+except (AttributeError, OSError):
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except (AttributeError, OSError):
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except (AttributeError, OSError):
+            pass
+
 # تسجيل أي انهيار منخفض المستوى (في مكتبات الصوت أو النموذج) حتى لو لم يترك خطأ بايثون
 import faulthandler
 try:
@@ -31,6 +45,11 @@ class TranscriptionApp(wx.App):
         single_instance.clear_inbox()
 
         self.settings = SettingsManager()
+        if self.settings.get("theme", "light") == "dark":
+            # المظهر الداكن الأصلي في ويندوز: يشمل كل النوافذ والقوائم وخانات الاختيار وشريط العنوان.
+            # يجب تفعيله قبل إنشاء أي نافذة، لذلك تغيير المظهر يكتمل بعد إعادة تشغيل البرنامج
+            from gui import icons
+            icons.native_dark = self.MSWEnableDarkMode(wx.App.DarkMode_Always)
         lang = self.settings.get("language", "ar")
         self.i18n = LocalizationManager(lang)
 
@@ -44,8 +63,13 @@ class TranscriptionApp(wx.App):
             wx.CallAfter(self.main_window.on_files_dropped, paths)
         else:
             # تفريغ لم يكتمل في المرة السابقة (إغلاق مفاجئ أو انقطاع كهرباء): نعرض استكماله
-            wx.CallAfter(self.main_window.check_pending_recovery)
+            wx.CallAfter(self.startup_checks)
         return True
+
+    def startup_checks(self):
+        # أول تشغيل بدون نموذج: إرشاد لمدير النماذج. وإلا: عرض استكمال أي تفريغ لم يكتمل
+        if self.main_window.ensure_model_ready(at_startup=True):
+            self.main_window.check_pending_recovery()
 
 if __name__ == '__main__':
     for folder in (DATA_DIR, LOGS_DIR, MODELS_DIR):

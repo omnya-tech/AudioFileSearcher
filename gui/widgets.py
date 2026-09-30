@@ -17,10 +17,18 @@ def auto_fit_first_column(list_ctrl, column=0, min_width=200):
 
 
 def fit_to_screen(window, margin=20):
-    """النافذة لا تكون أبداً أكبر من المساحة المتاحة في الشاشة (بدون شريط المهام)، وإلا يُقص جزء منها"""
+    """
+    ضبط النافذة على الشاشة التي تفتح عليها:
+    1) المقاس المكتوب في الكود بوحدات مستقلة عن التكبير، فيُضرب في نسبة تكبير ويندوز (125%، 150%...)
+    2) ثم لا تكون أبداً أكبر من المساحة المتاحة (بدون شريط المهام)، وإلا يُقص جزء منها
+    """
+    if not getattr(window, "_dip_scaled", False):
+        window._dip_scaled = True
+        window.SetSize(window.FromDIP(window.GetSize()))
     idx = wx.Display.GetFromWindow(window)
     display = wx.Display(idx if idx != wx.NOT_FOUND else 0)
     area = display.GetClientArea()
+    margin = window.FromDIP(margin)
     w, h = window.GetSize()
     new_w, new_h = min(w, area.width - margin), min(h, area.height - margin)
     if (new_w, new_h) != (w, h):

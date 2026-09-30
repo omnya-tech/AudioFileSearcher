@@ -17,6 +17,10 @@ GLYPHS = {
     "search": ("", "normal"),
     "edit": ("", "normal"),
     "play": ("", "good"),
+    "back": ("", "normal"),
+    "forward": ("", "normal"),
+    "merge": ("", "normal"),
+    "split": ("", "normal"),
     "pause": ("", "normal"),
     "stop": ("", "danger"),
     "progress": ("", "normal"),
@@ -49,6 +53,21 @@ PALETTE = {
 
 _theme = "light"
 _cache = {}
+# المظهر الداكن الأصلي في ويندوز (يُفعَّل عند بدء البرنامج): كل النوافذ والقوائم داكنة، فكل الأيقونات بألوان الداكن
+native_dark = False
+
+
+def scale():
+    """نسبة تكبير الشاشة الأساسية في ويندوز (1.0 = 100%، 1.5 = 150%)"""
+    try:
+        return max(1.0, wx.Display(0).GetScaleFactor())
+    except Exception:
+        return 1.0
+
+
+def px(size):
+    """حجم الأيقونة بالبكسل الفعلي: 16 على شاشة 100% تصبح 24 على شاشة 150%"""
+    return int(round(size * scale()))
 
 
 def set_theme(theme):
@@ -83,7 +102,8 @@ def render_glyph(glyph, size, colour):
 def get(name, size=16, theme=None):
     if name not in GLYPHS or not available():
         return wx.NullBitmap
-    theme = theme or _theme
+    theme = "dark" if native_dark else (theme or _theme)
+    size = px(size)
     key = (name, size, theme)
     if key not in _cache:
         glyph, kind = GLYPHS[name]
@@ -96,7 +116,7 @@ def button(btn, name, theme=None, size=16):
     bmp = get(name, size, theme)
     if bmp.IsOk():
         btn.SetBitmap(bmp)
-        btn.SetBitmapMargins(4, 0)
+        btn.SetBitmapMargins(btn.FromDIP(4), 0)
     return btn
 
 
@@ -126,9 +146,9 @@ def set_window_icon(window):
 
 def image_list(names, size=16, theme=None):
     """قائمة صور لتبويبات النوافذ"""
-    il = wx.ImageList(size, size)
+    il = wx.ImageList(px(size), px(size))
     for n in names:
         bmp = get(n, size, theme)
-        il.Add(bmp if bmp.IsOk() else wx.Bitmap(size, size))
+        il.Add(bmp if bmp.IsOk() else wx.Bitmap(px(size), px(size)))
     return il
 

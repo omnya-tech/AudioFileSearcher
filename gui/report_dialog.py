@@ -85,9 +85,9 @@ class ReportDialog(wx.Dialog):
             sizer.Add(lbl, 0, wx.LEFT | wx.RIGHT, 10)
 
             self.list_ctrl = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
-            self.list_ctrl.InsertColumn(0, self.i18n.get("report_col_time"), width=160)
-            self.list_ctrl.InsertColumn(1, self.i18n.get("report_col_confidence"), width=110)
-            self.list_ctrl.InsertColumn(2, self.i18n.get("report_col_status"), width=360)
+            self.list_ctrl.InsertColumn(0, self.i18n.get("report_col_time"), width=self.FromDIP(160))
+            self.list_ctrl.InsertColumn(1, self.i18n.get("report_col_confidence"), width=self.FromDIP(110))
+            self.list_ctrl.InsertColumn(2, self.i18n.get("report_col_status"), width=self.FromDIP(360))
             for idx, d in enumerate(details):
                 self.list_ctrl.InsertItem(idx, d.get("time", ""))
                 self.list_ctrl.SetItem(idx, 1, d.get("confidence", ""))

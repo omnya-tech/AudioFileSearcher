@@ -44,8 +44,8 @@ class CustomDictDialog(wx.Dialog):
         main_sizer.Add(lbl_list, 0, wx.LEFT | wx.RIGHT | wx.TOP, 15)
         self.dict_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
         self.dict_list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
-        self.dict_list.InsertColumn(0, self.i18n.get("lbl_wrong_word"), width=200)
-        self.dict_list.InsertColumn(1, self.i18n.get("lbl_correct_word"), width=300)
+        self.dict_list.InsertColumn(0, self.i18n.get("lbl_wrong_word"), width=self.FromDIP(200))
+        self.dict_list.InsertColumn(1, self.i18n.get("lbl_correct_word"), width=self.FromDIP(300))
         main_sizer.Add(self.dict_list, 1, wx.EXPAND | wx.ALL, 15)
         
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)

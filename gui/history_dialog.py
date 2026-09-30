@@ -27,12 +27,12 @@ class HistoryDialog(wx.Dialog):
 
         sizer.Add(wx.StaticText(panel, label=self.i18n.get("lbl_history_list")), 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         self.list_ctrl = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-        self.list_ctrl.InsertColumn(0, self.i18n.get("history_col_date"), width=130)
-        self.list_ctrl.InsertColumn(1, self.i18n.get("history_col_file"), width=200)
-        self.list_ctrl.InsertColumn(2, self.i18n.get("report_audio_duration").rstrip(":"), width=140)
-        self.list_ctrl.InsertColumn(3, self.i18n.get("history_col_duration"), width=110)
-        self.list_ctrl.InsertColumn(4, self.i18n.get("history_col_words"), width=90)
-        self.list_ctrl.InsertColumn(5, self.i18n.get("history_col_status"), width=130)
+        self.list_ctrl.InsertColumn(0, self.i18n.get("history_col_date"), width=self.FromDIP(130))
+        self.list_ctrl.InsertColumn(1, self.i18n.get("history_col_file"), width=self.FromDIP(200))
+        self.list_ctrl.InsertColumn(2, self.i18n.get("report_audio_duration").rstrip(":"), width=self.FromDIP(140))
+        self.list_ctrl.InsertColumn(3, self.i18n.get("history_col_duration"), width=self.FromDIP(110))
+        self.list_ctrl.InsertColumn(4, self.i18n.get("history_col_words"), width=self.FromDIP(90))
+        self.list_ctrl.InsertColumn(5, self.i18n.get("history_col_status"), width=self.FromDIP(130))
         # عمود اسم الملف يأخذ العرض المتبقي
         widgets.auto_fit_first_column(self.list_ctrl, column=1, min_width=120)
 
