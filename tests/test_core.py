@@ -102,3 +102,52 @@ def test_all_used_keys_exist():
     used = check_keys.extract_keys_from_code(BASE_DIR)
     ar = json.load(open(os.path.join(BASE_DIR, "locales", "ar.json"), encoding="utf-8"))
     assert sorted(used - set(ar)) == []
+
+
+def test_std_streams_fixed_without_console(tmp_path, monkeypatch):
+    """بدون نافذة سوداء (exe/pythonw) الطباعة وشريط تقدم التحميل يجب ألا يوقفا البرنامج"""
+    import sys
+    from core import paths
+    monkeypatch.setattr(paths, "LOGS_DIR", str(tmp_path / "logs"))
+    monkeypatch.setattr(sys, "stdout", None)
+    monkeypatch.setattr(sys, "stderr", None)
+    paths.ensure_std_streams()
+    from tqdm import tqdm
+    for _ in tqdm(range(3)):
+        pass
+    print("works")
+    assert (tmp_path / "logs" / "console.log").exists()
+
+
+def test_read_only_program_folder_falls_back(tmp_path, monkeypatch):
+    """لو مجلد البرنامج للقراءة فقط (Program Files) البيانات تذهب لمجلد المستخدم ولا ينهار البرنامج"""
+    import tempfile
+    from core import paths
+    appdata = str(tmp_path)
+
+    def deny_program_folder(*a, dir=None, **k):
+        # محاكاة Program Files: الكتابة ممنوعة في مجلد البرنامج فقط
+        if dir and not dir.startswith(appdata):
+            raise PermissionError("denied")
+        return real_mkstemp(*a, dir=dir, **k)
+    real_mkstemp = tempfile.mkstemp
+    monkeypatch.setattr(tempfile, "mkstemp", deny_program_folder)
+    monkeypatch.setenv("APPDATA", appdata)
+    import importlib
+    reloaded = importlib.reload(paths)
+    try:
+        assert reloaded.DATA_DIR == str(tmp_path / "AudioTranscriber")
+        assert reloaded.CONFIG_FILE.startswith(reloaded.DATA_DIR)
+        assert reloaded.ensure_dir(reloaded.LOGS_DIR)
+        # مجلد نماذج بجانب البرنامج يبقى ضمن أماكن البحث
+        assert any(d.endswith("models") for d in reloaded.EXTRA_MODEL_DIRS)
+    finally:
+        monkeypatch.undo()
+        importlib.reload(paths)
+
+
+def test_logger_survives_unwritable_dir(monkeypatch):
+    from core import logger
+    monkeypatch.setattr(logger, "LOGS_DIR", r"Z:\definitely\not\here")
+    lg = logger.Logger()   # لا يجب أن يرمي خطأ
+    lg._write("ERROR", "test")

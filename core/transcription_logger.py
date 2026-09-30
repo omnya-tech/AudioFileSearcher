@@ -2,7 +2,7 @@ import json
 import os
 import threading
 from datetime import datetime
-from core.paths import LOGS_DIR
+from core.paths import LOGS_DIR, ensure_dir
 from typing import List, Dict, Any
 
 def log_error(msg):
@@ -15,8 +15,7 @@ class TranscriptionLogger:
         self.history_file = os.path.join(self.log_dir, "transcription_history.json")
         self.file_lock = threading.Lock()
 
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
+        ensure_dir(self.log_dir)
 
         self.history = self.load_history()
 

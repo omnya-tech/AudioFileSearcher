@@ -1,7 +1,7 @@
 import os
 import json
 
-from core.paths import APP_DIR as BASE_DIR, CONFIG_FILE
+from core.paths import RESOURCE_DIR as BASE_DIR, CONFIG_FILE, ensure_dir
 
 class SettingsManager:
     def __init__(self, config_file=None):
@@ -56,6 +56,7 @@ class SettingsManager:
         # الكتابة في ملف مؤقت ثم استبداله، حتى لا يتلف ملف الإعدادات لو انقطع الحفظ في المنتصف
         tmp_file = self.config_file + ".tmp"
         try:
+            ensure_dir(os.path.dirname(self.config_file))
             with open(tmp_file, 'w', encoding='utf-8') as f:
                 json.dump(self.settings, f, indent=4, ensure_ascii=False)
             os.replace(tmp_file, self.config_file)

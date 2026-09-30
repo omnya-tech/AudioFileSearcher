@@ -1,7 +1,11 @@
-import wx
 import os
 import sys
-from core.paths import APP_DIR
+
+# أولاً وقبل أي مكتبة أخرى: بدون نافذة سوداء تكون مخرجات الطباعة فارغة، وأي مكتبة تطبع شيئاً تنهار
+from core.paths import DATA_DIR, LOGS_DIR, MODELS_DIR, ensure_dir, ensure_std_streams
+ensure_std_streams()
+
+import wx
 from core.i18n import LocalizationManager
 from core.settings import SettingsManager
 from gui.main_window import MainWindow
@@ -22,8 +26,7 @@ class TranscriptionApp(wx.App):
         return True
 
 if __name__ == '__main__':
-    # المجلدات تُنشأ بجانب البرنامج مهما كان المجلد الذي تم التشغيل منه
-    for folder in ("models", "output", "logs"):
-        os.makedirs(os.path.join(APP_DIR, folder), exist_ok=True)
+    for folder in (DATA_DIR, LOGS_DIR, MODELS_DIR):
+        ensure_dir(folder)
     app = TranscriptionApp(False)
     app.MainLoop()

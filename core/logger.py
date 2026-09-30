@@ -1,14 +1,14 @@
 import os
 from datetime import datetime
-from core.paths import LOGS_DIR
+from core.paths import LOGS_DIR, ensure_dir
 
 class Logger:
     def __init__(self):
         self.log_dir = LOGS_DIR
         self.log_file = os.path.join(self.log_dir, "app.log")
         
-        if not os.path.exists(self.log_dir):
-            os.makedirs(self.log_dir)
+        # لا نوقف البرنامج لو تعذر إنشاء مجلد السجلات: التسجيل ميزة مساعدة وليست أساسية
+        ensure_dir(self.log_dir)
 
     def _write(self, level, msg, code=None):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

@@ -1,16 +1,16 @@
 import os
-from core.paths import MODELS_DIR
+from core.paths import MODELS_DIR, EXTRA_MODEL_DIRS, ensure_dir
 
 class ModelManager:
     @staticmethod
     def get_models_dir():
-        models_dir = MODELS_DIR
-        if not os.path.exists(models_dir):
-            try:
-                os.makedirs(models_dir)
-            except Exception:
-                pass
-        return models_dir
+        ensure_dir(MODELS_DIR)
+        return MODELS_DIR
+
+    @staticmethod
+    def get_search_dirs():
+        """مجلد النماذج الأساسي (للتحميل) + مجلدات إضافية للقراءة فقط، مثل مجلد models بجانب البرنامج"""
+        return [ModelManager.get_models_dir()] + [d for d in EXTRA_MODEL_DIRS if os.path.isdir(d)]
 
     @staticmethod
     def to_repo_id(model_id):
@@ -42,22 +42,21 @@ class ModelManager:
 
     @staticmethod
     def get_installed_models():
-        models_dir = ModelManager.get_models_dir()
         installed = []
-        if os.path.exists(models_dir):
+        for models_dir in ModelManager.get_search_dirs():
             for item in sorted(os.listdir(models_dir)):
-                if ModelManager.is_valid_model_dir(os.path.join(models_dir, item)):
+                if item not in installed and ModelManager.is_valid_model_dir(os.path.join(models_dir, item)):
                     installed.append(item)
         return installed
 
     @staticmethod
     def find_local_model(model_id):
         """إرجاع مسار النموذج المحلي إن وُجد، أو None"""
-        models_dir = ModelManager.get_models_dir()
-        for name in ModelManager._candidate_folder_names(model_id):
-            path = os.path.join(models_dir, name)
-            if ModelManager.is_valid_model_dir(path):
-                return path
+        for models_dir in ModelManager.get_search_dirs():
+            for name in ModelManager._candidate_folder_names(model_id):
+                path = os.path.join(models_dir, name)
+                if ModelManager.is_valid_model_dir(path):
+                    return path
         return None
 
     @staticmethod
@@ -67,8 +66,13 @@ class ModelManager:
 
     @staticmethod
     def get_installed_model_path(folder_name):
-        """المسار الكامل لمجلد نموذج مثبت (يُستخدم في الحذف)"""
-        return os.path.join(ModelManager.get_models_dir(), os.path.basename(folder_name))
+        """المسار الكامل لمجلد نموذج مثبت (يُستخدم في الحذف وعرض الحجم)"""
+        name = os.path.basename(folder_name)
+        for models_dir in ModelManager.get_search_dirs():
+            path = os.path.join(models_dir, name)
+            if os.path.isdir(path):
+                return path
+        return os.path.join(ModelManager.get_models_dir(), name)
 
     @staticmethod
     def get_folder_size(folder_path):
