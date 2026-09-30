@@ -1,4 +1,5 @@
 import wx
+from gui import icons, widgets
 from core.i18n import LocalizationManager
 
 # نصيحة النموذج الأسرع تظهر لو التفريغ أخذ أكثر من ضعف ونصف مدة الصوت، في ملف أطول من دقيقة
@@ -11,6 +12,7 @@ class ReportDialog(wx.Dialog):
         super().__init__(parent, title=i18n.get("report_title"), size=(700, 600), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.i18n = i18n
         i18n.apply_direction(self)
+        widgets.fit_to_screen(self)
         self.report = report_data or {}
         self.setup_ui()
         self.CenterOnParent()
@@ -36,7 +38,8 @@ class ReportDialog(wx.Dialog):
         if audio_sec > 0 and proc_sec > 0:
             # كم ثانية صوت تتم معالجتها في كل ثانية (أكبر من 1 = أسرع من الزمن الحقيقي)
             ratio = audio_sec / proc_sec
-            lines.append(f"{g('report_speed_ratio')} {ratio:.2f}x")
+            # "استغرق التفريغ 1.3 ضعف مدة الصوت" أوضح للمستخدم من "معامل السرعة 0.76"
+            lines.append(g('report_speed_ratio', factor=f"{proc_sec / audio_sec:.1f}"))
             # التفريغ أبطأ بوضوح من مدة الصوت، والملف طويل بما يكفي ليفرق ذلك مع المستخدم
             if ratio < SLOW_RATIO and audio_sec >= SLOW_TIP_MIN_AUDIO:
                 slow_tip = g('report_speed_tip', factor=f"{1 / ratio:.1f}")
@@ -93,7 +96,7 @@ class ReportDialog(wx.Dialog):
                     self.list_ctrl.SetItemTextColour(idx, wx.Colour(200, 40, 40))
             sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 10)
 
-        btn_close = wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_close"))
+        btn_close = icons.button(wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_close")), "close", theme="light")
         sizer.Add(btn_close, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
 
         panel.SetSizer(sizer)

@@ -2,6 +2,7 @@
 import wx
 from core.i18n import LocalizationManager
 from core.cross_file_search import CrossFileSearcher, find_audio_for
+from gui import icons, widgets
 
 EVT_SEARCH_DONE_ID = wx.NewIdRef()
 
@@ -52,10 +53,10 @@ class CrossFileSearchPanel(wx.Panel):
 
         # عنوان القائمة يحمل عدد النتائج، فيُنطق تلقائياً عند الانتقال للقائمة
         self.lbl_list = wx.StaticText(self, label=self.i18n.get("lbl_search_results"))
-        self.list_ctrl = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-        self._insert_columns()
+        self.list_ctrl = self._create_list()
         sizer.Add(self.lbl_list, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 5)
+        self.main_sizer = sizer
 
         self.lbl_status = wx.StaticText(self, label="")
         sizer.Add(self.lbl_status, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
@@ -64,13 +65,34 @@ class CrossFileSearchPanel(wx.Panel):
         self.btn_folder.Bind(wx.EVT_BUTTON, self.on_select_folder)
         self.btn_search.Bind(wx.EVT_BUTTON, self.on_search)
         self.txt_query.Bind(wx.EVT_TEXT_ENTER, self.on_search)
-        self.list_ctrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_item_activated)
+
+    def _create_list(self):
+        lst = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        lst.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_item_activated)
+        self.list_ctrl = lst
+        self._insert_columns()
+        widgets.auto_fit_first_column(lst)
+        return lst
+
+    def rebuild_list(self):
+        """بعد تغيير اتجاه الواجهة: قائمة جديدة بالاتجاه الصحيح (رؤوس الأعمدة لا تنعكس في القائمة القديمة)"""
+        old = self.list_ctrl
+        new = self._create_list()
+        self.main_sizer.Replace(old, new)
+        old.Destroy()
+        new.MoveAfterInTabOrder(self.lbl_list)
+        self._show_results(self.results)
+
+    def apply_icons(self):
+        icons.button(self.btn_folder, "folder")
+        icons.button(self.btn_search, "search")
 
     def _insert_columns(self):
         # النص أولاً لأن قارئ الشاشة ينطق العمود الأول قبل غيره
         self.list_ctrl.InsertColumn(0, self.i18n.get("col_text_snippet"), width=500)
         self.list_ctrl.InsertColumn(1, self.i18n.get("col_file_name"), width=200)
         self.list_ctrl.InsertColumn(2, self.i18n.get("col_time"), width=150)
+        widgets.fit_first_column(self.list_ctrl)
 
     def refresh_ui_texts(self):
         self.btn_folder.SetLabel(self.i18n.get("btn_select_search_folder"))
@@ -81,8 +103,9 @@ class CrossFileSearchPanel(wx.Panel):
         self.btn_search.SetLabel(self.i18n.get("btn_search"))
         if not self.search_dir:
             self.txt_folder.SetValue(self.i18n.get("hint_no_folder_selected"))
-        self.list_ctrl.ClearAll()
-        self._insert_columns()
+        if self.list_ctrl.GetColumnCount() == 0 or self.list_ctrl.GetColumn(0).GetText() != self.i18n.get("col_text_snippet"):
+            self.list_ctrl.ClearAll()
+            self._insert_columns()
         self._show_results(self.results)
         self.lbl_status.SetLabel("")
         self.Layout()
@@ -126,7 +149,7 @@ class CrossFileSearchPanel(wx.Panel):
         self.results = event.results
         self._show_results(self.results)
         if self.results:
-            found = self.i18n.get("status_found_results", count=len(self.results))
+            found = self.i18n.get("status_found_results", count=self.i18n.plural("n_results", len(self.results)))
             self.lbl_status.SetLabel(found)
             # العدد في اسم القائمة: قارئ الشاشة ينطقه عند نقل التركيز إليها
             self.lbl_list.SetLabel(f"{self.i18n.get('lbl_search_results')} {found}")

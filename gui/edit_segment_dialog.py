@@ -1,4 +1,5 @@
 import wx
+from gui import icons, widgets
 from core.i18n import LocalizationManager
 
 class EditSegmentDialog(wx.Dialog):
@@ -8,6 +9,7 @@ class EditSegmentDialog(wx.Dialog):
         super().__init__(parent, title=i18n.get("dialog_edit_segment_title"), size=(560, 300), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.i18n = i18n
         i18n.apply_direction(self)
+        widgets.fit_to_screen(self)
         self.play_callback = play_callback
         self.setup_ui(time_range, text)
         self.CenterOnParent()
@@ -25,10 +27,10 @@ class EditSegmentDialog(wx.Dialog):
         sizer.Add(self.txt, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.btn_play = wx.Button(panel, label=self.i18n.get("menu_play_segment") + " (F5)")
+        self.btn_play = icons.button(wx.Button(panel, label=self.i18n.get("menu_play_segment") + " (F5)"), "play", theme="light")
         self.btn_play.Enable(self.play_callback is not None)
-        btn_ok = wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_save"))
-        btn_cancel = wx.Button(panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel"))
+        btn_ok = icons.button(wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_save")), "save", theme="light")
+        btn_cancel = icons.button(wx.Button(panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel")), "cancel", theme="light")
         btn_sizer.Add(self.btn_play, 0, wx.ALL, 5)
         btn_sizer.AddStretchSpacer(1)
         btn_sizer.Add(btn_ok, 0, wx.ALL, 5)

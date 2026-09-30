@@ -49,6 +49,21 @@ class LocalizationManager:
         import wx
         notebook.SetLayoutDirection(wx.Layout_LeftToRight)
 
+    def plural(self, base_key, n):
+        """
+        صيغة الجمع حسب العدد. العربية: 1 مفرد، 2 مثنى، 3-10 جمع، 11+ مفرد منصوب ("11 دقيقة").
+        المفاتيح في ملفات اللغة: <base>_one, <base>_two, <base>_few, <base>_many (والإنجليزية one/many فقط).
+        """
+        if self.language == "ar":
+            form = "one" if n == 1 else "two" if n == 2 else "few" if 3 <= n % 100 <= 10 else "many"
+        else:
+            form = "one" if n == 1 else "many"
+        key = f"{base_key}_{form}"
+        lang = self.translations.get(self.language, {})
+        if key not in lang:
+            key = f"{base_key}_many"
+        return self.get(key, n=n)
+
     def add_observer(self, callback):
         """تسجيل دالة يتم استدعاؤها عند تغيير لغة الواجهة"""
         if callback not in self._observers:

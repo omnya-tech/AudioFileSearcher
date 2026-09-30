@@ -22,6 +22,7 @@ from gui.audio_player import AudioPlayerPanel
 from gui.search_panel import CrossFileSearchPanel
 from gui.processing_dialog import ProcessingDialog
 from gui.edit_segment_dialog import EditSegmentDialog
+from gui import icons, widgets
 
 # علامة BOM في أول ملفات النص والترجمة: بدونها تعرض بعض المشغلات والتلفزيونات القديمة العربي كرموز غريبة
 TEXT_EXPORT_ENCODING = "utf-8-sig"
@@ -30,13 +31,13 @@ TEXT_EXPORT_ENCODING = "utf-8-sig"
 RECOVERY_SAVE_INTERVAL = 5
 
 EXPORT_FORMATS = ["srt", "txt", "vtt", "json", "docx"]
-EXPORT_WILDCARDS = {
-    "srt": "SRT (*.srt)|*.srt",
-    "txt": "Text (*.txt)|*.txt",
-    "vtt": "WebVTT (*.vtt)|*.vtt",
-    "json": "JSON (*.json)|*.json",
-    "docx": "Word (*.docx)|*.docx",
-}
+# اسم كل صيغة يُترجم حسب لغة الواجهة (المفتاح في ملفات اللغة: wc_<الصيغة>)
+EXPORT_FORMAT_KEYS = {"srt": "wc_srt", "txt": "wc_txt", "vtt": "wc_vtt", "json": "wc_json", "docx": "wc_docx"}
+
+
+def list_audio_files(folder):
+    return sorted(os.path.join(folder, f) for f in os.listdir(folder)
+                  if is_audio_file(f) and os.path.isfile(os.path.join(folder, f)))
 
 
 def is_audio_file(path):
@@ -58,6 +59,7 @@ class MainWindow(wx.Frame):
         super().__init__(parent, title=title, size=(950, 700))
         self.i18n = i18n
         i18n.apply_direction(self)
+        widgets.fit_to_screen(self)
         self.settings = settings
         self.audio_path = None
         self.all_segments = []
@@ -78,6 +80,8 @@ class MainWindow(wx.Frame):
             # لا توجد كارت صوت أو جهاز تشغيل: البرنامج يعمل، والتشغيل فقط هو المعطل
             log_error(f"Audio device init failed: {e}")
         self.i18n.add_observer(self.refresh_ui_texts)
+        icons.set_theme(self.settings.get("theme", "light"))
+        icons.set_window_icon(self)
 
         self.setup_menu()
         self.setup_ui()
@@ -89,9 +93,33 @@ class MainWindow(wx.Frame):
         EVT_RESULT(self, self.on_transcription_update)
 
         self.Center()
+        self.restore_window_geometry()
         wx.CallAfter(self.update_title_with_tab)
 
     # ------------------------------------------------------------------ العنوان والتبويبات
+    def restore_window_geometry(self):
+        """فتح النافذة بنفس مقاسها ومكانها في المرة السابقة، بشرط أن يكون المكان ما زال داخل شاشة موجودة"""
+        geo = self.settings.get("window_geometry") or {}
+        try:
+            x, y, w, h = (int(geo[k]) for k in ("x", "y", "w", "h"))
+        except (KeyError, TypeError, ValueError):
+            return
+        if wx.Display.GetFromPoint(wx.Point(x + 40, y + 20)) == wx.NOT_FOUND:
+            return  # الشاشة التي كانت عليها النافذة لم تعد موصولة
+        self.SetSize(x, y, max(w, 600), max(h, 400))
+        widgets.fit_to_screen(self)
+        if geo.get("maximized"):
+            self.Maximize()
+
+    def save_window_geometry(self):
+        maximized = self.IsMaximized()
+        rect = self.GetRect() if not (maximized or self.IsIconized()) else None
+        geo = dict(self.settings.get("window_geometry") or {})
+        if rect is not None:
+            geo.update(x=rect.x, y=rect.y, w=rect.width, h=rect.height)
+        geo["maximized"] = maximized
+        self.settings.set("window_geometry", geo)
+
     def get_base_title(self):
         return f"{self.i18n.get('app_name')} - {self.i18n.get('app_version')}"
 
@@ -161,33 +189,33 @@ class MainWindow(wx.Frame):
         labels = self._menu_labels()
         menubar = wx.MenuBar()
         file_menu = wx.Menu()
-        self.mi_select_audio = file_menu.Append(wx.ID_ANY, labels["mi_select_audio"])
-        self.mi_select_folder = file_menu.Append(wx.ID_ANY, labels["mi_select_folder"])
-        self.mi_open_srt = file_menu.Append(wx.ID_ANY, labels["mi_open_srt"])
+        self.mi_select_audio = icons.menu_item(file_menu, wx.ID_ANY, labels["mi_select_audio"], "audio_file")
+        self.mi_select_folder = icons.menu_item(file_menu, wx.ID_ANY, labels["mi_select_folder"], "folder")
+        self.mi_open_srt = icons.menu_item(file_menu, wx.ID_ANY, labels["mi_open_srt"], "subtitle")
         file_menu.AppendSeparator()
-        self.mi_export = file_menu.Append(wx.ID_ANY, labels["mi_export"])
+        self.mi_export = icons.menu_item(file_menu, wx.ID_ANY, labels["mi_export"], "save")
         file_menu.AppendSeparator()
-        self.mi_exit = file_menu.Append(wx.ID_EXIT, labels["mi_exit"])
+        self.mi_exit = icons.menu_item(file_menu, wx.ID_EXIT, labels["mi_exit"], "exit")
 
         view_menu = wx.Menu()
-        self.mi_focus_filter = view_menu.Append(wx.ID_ANY, labels["mi_focus_filter"])
-        self.mi_edit_segment = view_menu.Append(wx.ID_ANY, labels["mi_edit_segment"])
+        self.mi_focus_filter = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_focus_filter"], "search")
+        self.mi_edit_segment = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_edit_segment"], "edit")
         view_menu.AppendSeparator()
-        self.mi_pause_audio = view_menu.Append(wx.ID_ANY, labels["mi_pause_audio"])
-        self.mi_stop_audio = view_menu.Append(wx.ID_ANY, labels["mi_stop_audio"])
-        self.mi_check_progress = view_menu.Append(wx.ID_ANY, labels["mi_check_progress"])
+        self.mi_pause_audio = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_pause_audio"], "pause")
+        self.mi_stop_audio = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_stop_audio"], "stop")
+        self.mi_check_progress = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_check_progress"], "progress")
         view_menu.AppendSeparator()
-        self.mi_history = view_menu.Append(wx.ID_ANY, labels["mi_history"])
+        self.mi_history = icons.menu_item(view_menu, wx.ID_ANY, labels["mi_history"], "history")
 
         tools_menu = wx.Menu()
-        self.mi_settings = tools_menu.Append(wx.ID_ANY, labels["mi_settings"])
+        self.mi_settings = icons.menu_item(tools_menu, wx.ID_ANY, labels["mi_settings"], "settings")
         tools_menu.AppendSeparator()
-        self.mi_download_model = tools_menu.Append(wx.ID_ANY, labels["mi_download_model"])
-        self.mi_custom_dict = tools_menu.Append(wx.ID_ANY, labels["mi_custom_dict"])
+        self.mi_download_model = icons.menu_item(tools_menu, wx.ID_ANY, labels["mi_download_model"], "download")
+        self.mi_custom_dict = icons.menu_item(tools_menu, wx.ID_ANY, labels["mi_custom_dict"], "dictionary")
 
         help_menu = wx.Menu()
-        self.mi_shortcuts = help_menu.Append(wx.ID_ANY, labels["mi_shortcuts"])
-        self.mi_about = help_menu.Append(wx.ID_ANY, labels["mi_about"])
+        self.mi_shortcuts = icons.menu_item(help_menu, wx.ID_ANY, labels["mi_shortcuts"], "keyboard")
+        self.mi_about = icons.menu_item(help_menu, wx.ID_ANY, labels["mi_about"], "info")
 
         menubar.Append(file_menu, self.i18n.get("menu_file"))
         menubar.Append(view_menu, self.i18n.get("menu_view"))
@@ -258,11 +286,11 @@ class MainWindow(wx.Frame):
         trans_sizer.Add(filter_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
         self.lbl_results = wx.StaticText(self.transcription_panel, label=self.i18n.get("lbl_results"))
-        self.result_list = wx.ListCtrl(self.transcription_panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-        self._insert_result_columns()
+        self.result_list = self._create_result_list()
         trans_sizer.Add(self.lbl_results, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         trans_sizer.Add(self.result_list, 1, wx.EXPAND | wx.ALL, 10)
 
+        self.trans_sizer = trans_sizer
         self.transcription_panel.SetSizer(trans_sizer)
 
         self.search_panel = CrossFileSearchPanel(self.notebook, self.i18n, play_callback=self.play_audio_from_search)
@@ -273,7 +301,8 @@ class MainWindow(wx.Frame):
 
         main_sizer.Add(self.notebook, 1, wx.EXPAND | wx.ALL, 5)
 
-        self.audio_player = AudioPlayerPanel(self.panel, self.i18n)
+        self.audio_player = AudioPlayerPanel(self.panel, self.i18n,
+                                             on_finished=lambda: self.status_bar.SetStatusText(self.i18n.get("status_ready")))
         self.audio_player.Hide()
         main_sizer.Add(self.audio_player, 0, wx.EXPAND | wx.ALL, 5)
 
@@ -287,11 +316,46 @@ class MainWindow(wx.Frame):
         self.btn_process.Bind(wx.EVT_BUTTON, self.on_process)
         self.btn_export.Bind(wx.EVT_BUTTON, self.on_export_srt)
         self.txt_filter.Bind(wx.EVT_TEXT, self.on_filter_results)
-        self.result_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_play_segment)
-        self.result_list.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
+        # الإفلات يعمل فوق القائمة وحقل الملف أيضاً، لا فقط فوق الخلفية
+        self.txt_file_path.SetDropTarget(AudioDropTarget(self))
         self.Bind(wx.EVT_CLOSE, self.on_exit)
 
         self.setup_button_hover_effects()
+
+    def apply_icons(self):
+        """أيقونات الأزرار والتبويبات (تُعاد عند تغيير المظهر لأن لونها يتبع الفاتح/الداكن)"""
+        for btn, name in ((self.btn_select, "audio_file"), (self.btn_select_folder, "folder"),
+                          (self.btn_process, "transcribe"), (self.btn_export, "save")):
+            icons.button(btn, name)
+        # التبويبات يرسمها ويندوز فاتحة دائماً، فأيقوناتها بألوان المظهر الفاتح
+        self._tab_images = icons.image_list(["transcribe", "search"], theme="light")
+        self.notebook.SetImageList(self._tab_images)
+        self.notebook.SetPageImage(0, 0)
+        self.notebook.SetPageImage(1, 1)
+        self.search_panel.apply_icons()
+        self.audio_player.apply_icons()
+
+    def _create_result_list(self):
+        lst = wx.ListCtrl(self.transcription_panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        lst.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_play_segment)
+        lst.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
+        lst.SetDropTarget(AudioDropTarget(self))
+        self.result_list = lst
+        self._insert_result_columns()
+        widgets.auto_fit_first_column(lst)
+        return lst
+
+    def _rebuild_result_list(self):
+        """
+        تغيير اتجاه القائمة وهي مفتوحة يترك رؤوس الأعمدة بالترتيب القديم في ويندوز،
+        فنُنشئ القائمة من جديد بالاتجاه الصحيح مكان القديمة
+        """
+        old = self.result_list
+        new = self._create_result_list()
+        self.trans_sizer.Replace(old, new)
+        old.Destroy()
+        # ترتيب التنقل: بعد عنوانها مباشرة، ليقرأ قارئ الشاشة العنوان كاسم لها
+        new.MoveAfterInTabOrder(self.lbl_results)
 
     def _insert_result_columns(self):
         # عمود النص أولاً: قارئ الشاشة ينطق العمود الأول عند التنقل بالأسهم، فيُسمع الكلام قبل التوقيت
@@ -299,6 +363,7 @@ class MainWindow(wx.Frame):
         self.result_list.InsertColumn(1, self.i18n.get("list_header_time"), width=130)
         # الحالة مكتوبة نصاً (وليس باللون فقط) حتى يسمعها مستخدم قارئ الشاشة
         self.result_list.InsertColumn(2, self.i18n.get("list_header_review"), width=220)
+        widgets.fit_first_column(self.result_list)
 
     def setup_accessibility(self):
         # تنبيه: لا نستخدم SetAcceleratorTable هنا، لأنه في ويندوز يستبدل اختصارات القوائم كلها فتتعطل.
@@ -402,15 +467,25 @@ class MainWindow(wx.Frame):
     # ------------------------------------------------------------------ فتح الملفات
     def on_files_dropped(self, filenames):
         if not filenames or self.transcription_thread_running(): return
-        path = filenames[0]
-        if os.path.isdir(path):
-            self.start_folder(path, auto_start=True)
-        elif os.path.isfile(path):
-            if is_audio_file(path):
-                self.set_single_file(path)
-                self.on_process(None)
-            elif path.lower().endswith(('.srt', '.vtt')):
-                self.load_srt_file(path)
+        # ملف ترجمة واحد: يُفتح للمراجعة
+        if len(filenames) == 1 and filenames[0].lower().endswith(('.srt', '.vtt')) and os.path.isfile(filenames[0]):
+            self.load_srt_file(filenames[0])
+            return
+        # غير ذلك: كل الملفات الصوتية المُفلتة (ومحتوى أي مجلد مُفلت) تُفرّغ
+        audio = []
+        for path in filenames:
+            if os.path.isdir(path):
+                audio += list_audio_files(path)
+            elif os.path.isfile(path) and is_audio_file(path):
+                audio.append(path)
+        if not audio:
+            wx.MessageBox(self.i18n.get("msg_folder_no_audio"), self.i18n.get("dialog_error_title"), wx.ICON_WARNING)
+        elif len(audio) == 1:
+            self.set_single_file(audio[0])
+            self.on_process(None)
+        else:
+            label = filenames[0] if len(filenames) == 1 else self.i18n.get("lbl_dropped_files", count=self.i18n.plural("n_audio_files", len(audio)))
+            self.start_batch(audio, label, auto_start=True)
 
     def transcription_thread_running(self):
         return bool(self.transcription_thread and self.transcription_thread.is_alive() and not self.transcription_thread.aborted)
@@ -423,15 +498,17 @@ class MainWindow(wx.Frame):
         self.btn_process.Enable()
 
     def start_folder(self, folder_path, auto_start=False):
-        files = sorted(os.path.join(folder_path, f) for f in os.listdir(folder_path)
-                       if is_audio_file(f) and os.path.isfile(os.path.join(folder_path, f)))
+        files = list_audio_files(folder_path)
         if not files:
             wx.MessageBox(self.i18n.get("msg_folder_no_audio"), self.i18n.get("dialog_error_title"), wx.ICON_WARNING)
             return
+        self.start_batch(files, folder_path, auto_start)
+
+    def start_batch(self, files, label, auto_start=False):
         self.batch_queue = files
         self.is_batch_mode = True
-        self.audio_path = folder_path
-        self.txt_file_path.SetValue(folder_path)
+        self.audio_path = os.path.dirname(files[0])
+        self.txt_file_path.SetValue(label)
         self.btn_process.Enable()
         if auto_start:
             self.on_process(None)
@@ -442,7 +519,7 @@ class MainWindow(wx.Frame):
         self._play(audio_path, start_time)
 
     def on_open_srt(self, event):
-        wildcard = "Subtitles (*.srt;*.vtt)|*.srt;*.vtt|All Files (*.*)|*.*"
+        wildcard = f"{self.i18n.get('wc_subtitles')} (*.srt;*.vtt)|*.srt;*.vtt|{self.i18n.get('wc_all')} (*.*)|*.*"
         dlg = wx.FileDialog(self, message=self.i18n.get("dialog_open_srt"), wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         if dlg.ShowModal() == wx.ID_OK:
             self.load_srt_file(dlg.GetPath())
@@ -476,7 +553,7 @@ class MainWindow(wx.Frame):
 
     def on_select_audio(self, event):
         exts = ";".join(f"*{e}" for e in AUDIO_EXTENSIONS)
-        wildcard = f"Audio ({exts})|{exts}|All Files (*.*)|*.*"
+        wildcard = f"{self.i18n.get('wc_audio')} ({exts})|{exts}|{self.i18n.get('wc_all')} (*.*)|*.*"
         dlg = wx.FileDialog(self, message=self.i18n.get("dialog_open_audio"), wildcard=wildcard, style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
         if dlg.ShowModal() == wx.ID_OK:
             self.set_single_file(dlg.GetPath())
@@ -564,7 +641,7 @@ class MainWindow(wx.Frame):
             return True, None
         msg = self.i18n.get("msg_resume_found", file=os.path.basename(path),
                             reached=format_clock(saved["last_end"]), total=format_clock(saved.get("duration") or 0),
-                            count=len(saved["segments"]))
+                            count=self.i18n.plural("n_lines", len(saved["segments"])))
         dlg = wx.MessageDialog(self, msg, self.i18n.get("dialog_info_title"), wx.YES_NO | wx.CANCEL | wx.YES_DEFAULT | wx.ICON_QUESTION)
         dlg.SetYesNoCancelLabels(self.i18n.get("btn_resume"), self.i18n.get("btn_restart"), self.i18n.get("btn_cancel"))
         res = dlg.ShowModal()
@@ -670,9 +747,9 @@ class MainWindow(wx.Frame):
             self._set_controls_busy(False)
             self._close_processing_dialog()
 
-            msg = self.i18n.get("msg_batch_done", count=succeeded)
+            msg = self.i18n.get("msg_batch_done", count=self.i18n.plural("n_files", succeeded))
             if self.batch_failed:
-                msg += "\n" + self.i18n.get("msg_batch_failed_count", count=self.batch_failed)
+                msg += "\n" + self.i18n.get("msg_batch_failed_count", count=self.i18n.plural("n_files", self.batch_failed))
             wx.MessageBox(msg, self.i18n.get("dialog_success_title"), wx.ICON_INFORMATION)
             if out_dir and succeeded and self.settings.get("open_folder_after_save", False):
                 self.open_in_file_manager(out_dir)
@@ -858,8 +935,11 @@ class MainWindow(wx.Frame):
         weak = self._weak_words(seg)
         review = self.i18n.get("report_weak_words", words="، ".join(weak)) if weak else ""
         self.result_list.SetItem(row, 2, review)
-        colour = wx.Colour(200, 40, 40) if weak else self.result_list.GetForegroundColour()
-        self.result_list.SetItemTextColour(row, colour)
+        # الأسطر العادية بلا لون خاص (تتبع لون القائمة في المظهرين)، والمشكوك فيها أحمر واضح في المظهرين
+        weak_colour = wx.Colour(255, 120, 120) if getattr(self, "_theme", "light") == "dark" else wx.Colour(200, 40, 40)
+        self.result_list.SetItemTextColour(row, weak_colour if weak else self.result_list.GetForegroundColour())
+        # خلفية السطر صراحةً بلون القائمة، وإلا يظهر شريط رمادي بعد إعادة بناء القائمة أو تغيير المظهر
+        self.result_list.SetItemBackgroundColour(row, self.result_list.GetBackgroundColour())
 
     def update_list(self, indices=None):
         """عرض المقاطع. indices أرقام المقاطع داخل all_segments (الكل لو None)"""
@@ -900,8 +980,8 @@ class MainWindow(wx.Frame):
         if seg_index is None:
             return
         menu = wx.Menu()
-        mi_play = menu.Append(wx.ID_ANY, self.i18n.get("menu_play_segment"))
-        mi_edit = menu.Append(wx.ID_ANY, self.i18n.get("menu_edit_segment") + "\tF2")
+        mi_play = icons.menu_item(menu, wx.ID_ANY, self.i18n.get("menu_play_segment"), "play")
+        mi_edit = icons.menu_item(menu, wx.ID_ANY, self.i18n.get("menu_edit_segment") + "\tF2", "edit")
         mi_play.Enable(bool(self._can_play()))
         self.Bind(wx.EVT_MENU, lambda e: self._play(self.audio_path, self.all_segments[seg_index][2]), mi_play)
         self.Bind(wx.EVT_MENU, self.on_edit_segment, mi_edit)
@@ -985,7 +1065,7 @@ class MainWindow(wx.Frame):
         if default_format in formats:
             formats.remove(default_format)
             formats.insert(0, default_format)
-        wildcard = "|".join(EXPORT_WILDCARDS[f] for f in formats)
+        wildcard = "|".join(f"{self.i18n.get(EXPORT_FORMAT_KEYS[f])} (*.{f})|*.{f}" for f in formats)
 
         default_name = ""
         if self.audio_path and os.path.isfile(self.audio_path):
@@ -1086,10 +1166,13 @@ class MainWindow(wx.Frame):
             if getattr(self.download_dialog, 'download_thread', None): self.download_dialog.download_thread.abort()
 
         if self.transcription_thread:
+            # حفظ آخر ما تم تفريغه ليُعرض استكماله عند الفتح القادم
+            self._save_recovery(force=True)
             self.transcription_thread.abort()
         if getattr(self, "_inbox_timer", None):
             self._inbox_timer.Stop()
         self.i18n.remove_observer(self.refresh_ui_texts)
+        self.save_window_geometry()
         self.audio_player.cleanup()
         try:
             if pygame.mixer.get_init(): pygame.mixer.quit()
@@ -1099,10 +1182,10 @@ class MainWindow(wx.Frame):
 
     # ------------------------------------------------------------------ اللغة والمظهر
     def apply_layout_direction(self):
-        """العربية من اليمين لليسار والإنجليزية من اليسار لليمين، للنافذة وكل ما بداخلها"""
+        """العربية من اليمين لليسار والإنجليزية من اليسار لليمين، للنافذة وكل ما بداخلها. ترجع True لو تغيّر الاتجاه"""
         direction = wx.Layout_RightToLeft if self.i18n.language == "ar" else wx.Layout_LeftToRight
         if self.GetLayoutDirection() == direction:
-            return
+            return False
         def apply(widget):
             widget.SetLayoutDirection(direction)
             for child in widget.GetChildren():
@@ -1114,9 +1197,10 @@ class MainWindow(wx.Frame):
             self.i18n.fix_notebook(self.notebook)
         finally:
             self.Thaw()
+        return True
 
     def refresh_ui_texts(self):
-        self.apply_layout_direction()
+        direction_changed = self.apply_layout_direction()
         if hasattr(self, 'notebook'):
             self.notebook.SetPageText(0, self.i18n.get("tab_transcription"))
             self.notebook.SetPageText(1, self.i18n.get("tab_global_search"))
@@ -1138,8 +1222,14 @@ class MainWindow(wx.Frame):
         self.lbl_file_path.SetLabel(self.i18n.get("lbl_selected_file"))
         self.lbl_results.SetLabel(self.i18n.get("lbl_results"))
 
-        self.result_list.ClearAll()
-        self._insert_result_columns()
+        if direction_changed:
+            self._rebuild_result_list()
+            self.search_panel.rebuild_list()
+            self.apply_theme(getattr(self, "_theme", "light"))
+            self.apply_font_size(self.settings.get("font_size", 10))
+        else:
+            self.result_list.ClearAll()
+            self._insert_result_columns()
         self.update_list(self.displayed_indices)
 
         self.search_panel.refresh_ui_texts()
@@ -1147,10 +1237,16 @@ class MainWindow(wx.Frame):
 
         self.update_title_with_tab()
         self.status_bar.SetStatusText(self.i18n.get("status_ready"))
-        self.panel.Layout()
+        # النصوص الجديدة أطول أو أقصر: إعادة حساب مقاس كل زر وعنوان حتى لا يُقص النص
+        widgets.refit_texts(self.panel)
+        # إعادة ترتيب كل لوحة داخلية (وليس الخارجية فقط)، وإلا تبقى القائمة الجديدة والأزرار بمقاساتها القديمة
+        for pane in (self.transcription_panel, self.search_panel, self.audio_player, self.panel):
+            pane.Layout()
+        self.SendSizeEvent()
         self.Refresh()
 
     def apply_theme(self, theme):
+        self._theme = theme
         if theme == "dark":
             bg_color = wx.Colour(15, 19, 28)
             panel_bg = wx.Colour(22, 29, 43)
@@ -1188,6 +1284,11 @@ class MainWindow(wx.Frame):
             for child in widget.GetChildren(): apply_recursive(child)
 
         apply_recursive(self.panel)
+        # لون الأيقونات يتبع المظهر
+        icons.set_theme(theme)
+        self.apply_icons()
+        # إعادة رسم الأسطر بلون المظهر الجديد (لون كل سطر يُحدد عند رسمه)
+        self.update_list(self.displayed_indices)
         self.Refresh()
 
     def apply_font_size(self, size):

@@ -6,6 +6,13 @@ import getpass
 from core.paths import DATA_DIR, LOGS_DIR, MODELS_DIR, ensure_dir, ensure_std_streams
 ensure_std_streams()
 
+# تسجيل أي انهيار منخفض المستوى (في مكتبات الصوت أو النموذج) حتى لو لم يترك خطأ بايثون
+import faulthandler
+try:
+    faulthandler.enable(open(os.path.join(LOGS_DIR, "crash.log"), "a", encoding="utf-8"))
+except OSError:
+    pass
+
 import wx
 from core.i18n import LocalizationManager
 from core.settings import SettingsManager

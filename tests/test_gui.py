@@ -216,9 +216,12 @@ def test_eta_estimate(main_window, i18n, monkeypatch):
     clock[0] += 60
     dlg.update_progress(20, 100, "x", "a.mp3")          # 10% في دقيقة => 80% في 8 دقائق
     assert dlg._estimate_remaining(20, "a.mp3") == pytest.approx(480)
-    assert "8" in dlg.list_ctrl.GetItemText(1)
+    assert "8 دقائق" in dlg.list_ctrl.GetItemText(1)
     assert dlg.format_eta(30) == i18n.get("eta_less_than_minute")
-    assert dlg.format_eta(3 * 3600 + 5 * 60) == i18n.get("eta_hours", hours=3, minutes=5)
+    # صيغ الجمع العربية: مثنى، جمع (3-10)، ومفرد بعد 10
+    assert dlg.format_eta(120) == "باقي حوالي دقيقتين"
+    assert dlg.format_eta(3 * 3600 + 5 * 60) == "باقي حوالي 3 ساعات و5 دقائق"
+    assert dlg.format_eta(25 * 60) == "باقي حوالي 25 دقيقة"
     dlg.Destroy()
 
 
@@ -237,3 +240,16 @@ def test_text_exports_have_bom(main_window, tmp_path, fmt):
     path = tmp_path / f"out.{fmt}"
     main_window.save_as(str(path), fmt, show_msg=False)
     assert path.read_bytes().startswith(b"\xef\xbb\xbf")
+
+
+def test_window_geometry_saved_and_restored(main_window, settings, i18n):
+    import gui.main_window as mw
+    main_window.SetSize(100, 80, 820, 560)
+    main_window.save_window_geometry()
+    geo = settings.get("window_geometry")
+    assert (geo["w"], geo["h"]) == (820, 560) and geo["maximized"] is False
+    second = mw.MainWindow(i18n, settings, None)
+    try:
+        assert tuple(second.GetSize()) == (820, 560)
+    finally:
+        second.Destroy()

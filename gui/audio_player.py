@@ -8,17 +8,34 @@ import wx
 import pygame
 from core.i18n import LocalizationManager
 from core.logger import log_error
+from gui import icons
 
 # جودة كافية للاستماع للكلام، مع حجم معقول للنسخة المؤقتة
 PLAYBACK_RATE = 22050
 
 class AudioPlayerPanel(wx.Panel):
-    def __init__(self, parent, i18n: LocalizationManager):
+    def __init__(self, parent, i18n: LocalizationManager, on_finished=None):
         super().__init__(parent)
         self.i18n = i18n
         self.is_playing = False
         self.current_audio = None
+        self.on_finished = on_finished
         self.setup_ui()
+        # متابعة انتهاء التشغيل من تلقاء نفسه (نهاية الملف) لتحديث الزر وشريط الحالة
+        self._end_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._check_finished, self._end_timer)
+        self._end_timer.Start(400)
+
+    def _check_finished(self, event):
+        try:
+            busy = pygame.mixer.get_init() and pygame.mixer.music.get_busy()
+        except Exception:
+            busy = False
+        if self.is_playing and not busy:
+            self.is_playing = False
+            self._update_play_label()
+            if self.on_finished:
+                self.on_finished()
 
     def setup_ui(self):
         sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -35,6 +52,11 @@ class AudioPlayerPanel(wx.Panel):
     def _update_play_label(self):
         key = "tooltip_pause_btn" if self.is_playing else "tooltip_play_btn"
         self.btn_play.SetLabel(self.i18n.get(key))
+        icons.button(self.btn_play, "pause" if self.is_playing else "play")
+
+    def apply_icons(self):
+        self._update_play_label()
+        icons.button(self.btn_stop, "stop")
 
     def refresh_ui_texts(self):
         self._update_play_label()
@@ -121,6 +143,7 @@ class AudioPlayerPanel(wx.Panel):
         self._update_play_label()
 
     def cleanup(self):
+        self._end_timer.Stop()
         self.on_stop(None)
         try:
             pygame.mixer.music.unload()

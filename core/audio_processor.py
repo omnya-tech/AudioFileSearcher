@@ -305,7 +305,9 @@ class TranscriptionThread(threading.Thread):
         elapsed = round(time.time() - self.start_time, 2)
         avg_confidence = int(total_confidence / total_segments) if total_segments > 0 else 0
 
-        report_model = os.path.basename(model_target) if is_local else model_target
+        # اسم النموذج كما يعرفه المستخدم (وليس اسم مجلده على القرص)، إلا لو اختار مجلداً مخصصاً
+        custom_path = self.settings.get("local_model_path", "")
+        report_model = os.path.basename(custom_path) if custom_path and model_target == custom_path             else ModelManager.to_repo_id(self.settings.get("model_size", "large-v3"))
 
         detected_errors = self.error_detector.detect_errors(results)
         detected_warnings = self.error_detector.detect_warnings(results)

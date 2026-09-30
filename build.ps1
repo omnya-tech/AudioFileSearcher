@@ -12,6 +12,8 @@ python -m PyInstaller main.py `
     --noconfirm `
     --clean `
     --add-data "locales;locales" `
+    --add-data "assets;assets" `
+    --icon "assets/app.ico" `
     --collect-data faster_whisper `
     --collect-binaries ctranslate2 `
     --collect-all onnxruntime `

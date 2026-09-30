@@ -1,4 +1,5 @@
 import wx
+from gui import icons, widgets
 import os
 import psutil
 from core.i18n import LocalizationManager
@@ -44,9 +45,10 @@ def readonly_note(parent, text):
 
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent, i18n: LocalizationManager, settings: SettingsManager):
-        super().__init__(parent, title=i18n.get("settings_title"), size=(620, 720), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        super().__init__(parent, title=i18n.get("settings_title"), size=(620, 600), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.i18n = i18n
         i18n.apply_direction(self)
+        widgets.fit_to_screen(self)
         self.settings = settings
         self.parent_window = parent
         self.setup_ui()
@@ -76,13 +78,20 @@ class SettingsDialog(wx.Dialog):
         self.notebook.AddPage(self.page_correction, self.i18n.get("tab_correction"))
         self.notebook.AddPage(self.page_appearance, self.i18n.get("tab_appearance"))
         self.i18n.fix_notebook(self.notebook)
+        # صفحات الإعدادات فاتحة دائماً، فالأيقونات بألوان المظهر الفاتح
+        self._tab_images = wx.ImageList(16, 16)
+        for i, name in enumerate(("engine", "advanced", "save", "dictionary", "appearance")):
+            self._tab_images.Add(icons.get(name, 16, theme="light"))
+        self.notebook.SetImageList(self._tab_images)
+        for i in range(self.notebook.GetPageCount()):
+            self.notebook.SetPageImage(i, i)
 
         main_sizer.Add(self.notebook, 1, wx.EXPAND | wx.ALL, 5)
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.btn_reset = wx.Button(panel, label=self.i18n.get("btn_reset"))
-        self.btn_save = wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_save"))
-        self.btn_cancel = wx.Button(panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel"))
+        self.btn_reset = icons.button(wx.Button(panel, label=self.i18n.get("btn_reset")), "reset", theme="light")
+        self.btn_save = icons.button(wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_save")), "save", theme="light")
+        self.btn_cancel = icons.button(wx.Button(panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel")), "cancel", theme="light")
 
         btn_sizer.Add(self.btn_reset, 0, wx.ALL, 5)
         btn_sizer.AddStretchSpacer(1)
@@ -109,7 +118,7 @@ class SettingsDialog(wx.Dialog):
 
         lbl_model = wx.StaticText(page, label=self.i18n.get("lbl_model_size"))
         self.cb_model = wx.Choice(page, choices=list(STANDARD_MODELS))
-        self.btn_auto_suggest = wx.Button(page, label=self.i18n.get("btn_auto_suggest"))
+        self.btn_auto_suggest = icons.button(wx.Button(page, label=self.i18n.get("btn_auto_suggest")), "suggest", theme="light")
         self.btn_auto_suggest.Bind(wx.EVT_BUTTON, self.on_auto_suggest)
         model_sizer = wx.BoxSizer(wx.HORIZONTAL)
         model_sizer.Add(self.cb_model, 1, wx.EXPAND | wx.RIGHT, 5)
@@ -126,8 +135,8 @@ class SettingsDialog(wx.Dialog):
 
         lbl_local = wx.StaticText(page, label=self.i18n.get("lbl_local_model_path"))
         self.txt_local_model = wx.TextCtrl(page, style=wx.TE_READONLY)
-        btn_browse_model = wx.Button(page, label=self.i18n.get("btn_browse_model"))
-        btn_clear_model = wx.Button(page, label=self.i18n.get("btn_clear"))
+        btn_browse_model = icons.button(wx.Button(page, label=self.i18n.get("btn_browse_model")), "folder", theme="light")
+        btn_clear_model = icons.button(wx.Button(page, label=self.i18n.get("btn_clear")), "clear", theme="light")
         btn_browse_model.Bind(wx.EVT_BUTTON, self.on_browse_model)
         btn_clear_model.Bind(wx.EVT_BUTTON, self.on_clear_model)
         local_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -258,7 +267,7 @@ class SettingsDialog(wx.Dialog):
         lbl_dir = wx.StaticText(page, label=self.i18n.get("lbl_output_directory"))
         self.txt_dir = wx.TextCtrl(page)
         self.txt_dir.SetHint(self.i18n.get("hint_output_same_folder"))
-        btn_browse = wx.Button(page, label=self.i18n.get("btn_browse"))
+        btn_browse = icons.button(wx.Button(page, label=self.i18n.get("btn_browse")), "folder", theme="light")
         btn_browse.Bind(wx.EVT_BUTTON, self.on_browse_output)
 
         dir_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -274,14 +283,15 @@ class SettingsDialog(wx.Dialog):
         sizer.Add(self.cb_fmt, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         sizer.Add(wx.StaticText(page, label=self.i18n.get("lbl_export_formats")), 0, wx.ALL, 5)
-        fmt_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        # خانتان في كل سطر: أسماء الخانات طويلة (جملة كاملة لقارئ الشاشة) فلا تتسع كلها في سطر واحد
+        fmt_sizer = wx.GridSizer(0, 2, 4, 10)
         self.chk_formats = {}
         for fmt in EXPORT_FORMATS:
             # الاسم الكامل (وليس "SRT" فقط) لأن قارئ الشاشة لا يربط الخانة بالعنوان الذي فوقها
             chk = wx.CheckBox(page, label=self.i18n.get("chk_export_format", fmt=fmt.upper()))
             self.chk_formats[fmt] = chk
-            fmt_sizer.Add(chk, 0, wx.RIGHT, 10)
-        sizer.Add(fmt_sizer, 0, wx.LEFT | wx.RIGHT, 5)
+            fmt_sizer.Add(chk, 0)
+        sizer.Add(fmt_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         self.chk_auto_save = wx.CheckBox(page, label=self.i18n.get("chk_auto_save"))
         self.chk_open_folder = wx.CheckBox(page, label=self.i18n.get("chk_open_folder"))
@@ -304,7 +314,7 @@ class SettingsDialog(wx.Dialog):
         self.chk_hotwords = wx.CheckBox(page, label=self.i18n.get("chk_use_hotwords"))
         sizer.Add(self.chk_hotwords, 0, wx.ALL, 5)
 
-        btn_dict = wx.Button(page, label=self.i18n.get("btn_custom_dictionary"))
+        btn_dict = icons.button(wx.Button(page, label=self.i18n.get("btn_custom_dictionary")), "dictionary", theme="light")
         btn_dict.Bind(wx.EVT_BUTTON, self.on_open_dict)
         sizer.Add(btn_dict, 0, wx.ALL, 5)
 

@@ -1,4 +1,5 @@
 import wx
+from gui import icons, widgets
 from core.i18n import LocalizationManager
 from core.settings import SettingsManager
 
@@ -7,6 +8,7 @@ class CustomDictDialog(wx.Dialog):
         super().__init__(parent, title=i18n.get("dialog_custom_dict_title"), size=(550, 450))
         self.i18n = i18n
         i18n.apply_direction(self)
+        widgets.fit_to_screen(self)
         self.settings = settings
         # نعمل على نسخة، فلا تتغير الإعدادات إلا عند الضغط على موافق
         self.custom_dict = dict(self.settings.get("custom_dictionary", {}) or {})
@@ -35,7 +37,7 @@ class CustomDictDialog(wx.Dialog):
         
         main_sizer.Add(input_sizer, 0, wx.EXPAND | wx.ALL, 15)
         
-        self.btn_add = wx.Button(panel, label=self.i18n.get("btn_add_word"))
+        self.btn_add = icons.button(wx.Button(panel, label=self.i18n.get("btn_add_word")), "add")
         main_sizer.Add(self.btn_add, 0, wx.ALIGN_RIGHT | wx.RIGHT | wx.LEFT, 15)
         
         lbl_list = wx.StaticText(panel, label=self.i18n.get("lbl_dict_words"))
@@ -47,11 +49,11 @@ class CustomDictDialog(wx.Dialog):
         main_sizer.Add(self.dict_list, 1, wx.EXPAND | wx.ALL, 15)
         
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.btn_remove = wx.Button(panel, label=self.i18n.get("btn_remove_word"))
-        self.btn_clear = wx.Button(panel, label=self.i18n.get("btn_clear_dict"))
-        self.btn_ok = wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_ok"))
+        self.btn_remove = icons.button(wx.Button(panel, label=self.i18n.get("btn_remove_word")), "delete")
+        self.btn_clear = icons.button(wx.Button(panel, label=self.i18n.get("btn_clear_dict")), "clear")
+        self.btn_ok = icons.button(wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_ok")), "ok")
         # زر إلغاء صريح: يجعل مفتاح Esc يغلق النافذة دون حفظ
-        self.btn_cancel = wx.Button(panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel"))
+        self.btn_cancel = icons.button(wx.Button(panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel")), "cancel")
         
         btn_sizer.Add(self.btn_remove, 0, wx.RIGHT, 10)
         btn_sizer.Add(self.btn_clear, 0, wx.RIGHT, 10)

@@ -1,4 +1,5 @@
 import wx
+from gui import icons, widgets
 import os
 import re
 import shutil
@@ -154,9 +155,11 @@ class HFModelDetailsThread(threading.Thread):
 
 class DownloadDialog(wx.Frame):
     def __init__(self, parent, i18n: LocalizationManager):
-        super().__init__(parent, title=i18n.get("dialog_download_model_title"), size=(680, 780), style=wx.DEFAULT_FRAME_STYLE ^ wx.RESIZE_BORDER ^ wx.MAXIMIZE_BOX)
+        super().__init__(parent, title=i18n.get("dialog_download_model_title"), size=(680, 640), style=wx.DEFAULT_FRAME_STYLE ^ wx.MAXIMIZE_BOX)
         self.i18n = i18n
         i18n.apply_direction(self)
+        widgets.fit_to_screen(self)
+        icons.set_window_icon(self)
         self.parent_window = parent
         self.is_downloading = False
         self.download_thread = None
@@ -216,7 +219,7 @@ class DownloadDialog(wx.Frame):
         dir_sizer = wx.BoxSizer(wx.HORIZONTAL)
         lbl_dir = wx.StaticText(self.panel_selection, label=self.i18n.get("lbl_download_dir"))
         self.txt_dir = wx.TextCtrl(self.panel_selection, style=wx.TE_READONLY)
-        self.btn_browse = wx.Button(self.panel_selection, label=self.i18n.get("btn_browse"))
+        self.btn_browse = icons.button(wx.Button(self.panel_selection, label=self.i18n.get("btn_browse")), "folder")
         self.txt_dir.SetValue(ModelManager.get_models_dir())
         dir_sizer.Add(lbl_dir, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         dir_sizer.Add(self.txt_dir, 1, wx.ALL | wx.EXPAND, 5)
@@ -231,6 +234,7 @@ class DownloadDialog(wx.Frame):
         self.info_list = wx.ListCtrl(self.panel_info, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES | wx.LC_VRULES)
         self.info_list.InsertColumn(0, self.i18n.get("dl_col_prop"), width=160)
         self.info_list.InsertColumn(1, self.i18n.get("dl_col_details"), width=470)
+        widgets.auto_fit_first_column(self.info_list, column=1, min_width=200)
         self.info_list.SetMinSize((-1, 160))
         info_sizer.Add(self.info_list, 1, wx.EXPAND | wx.ALL, 5)
         self.panel_info.SetSizer(info_sizer)
@@ -245,6 +249,7 @@ class DownloadDialog(wx.Frame):
         self.progress_list = wx.ListCtrl(self.panel_progress, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
         self.progress_list.InsertColumn(0, self.i18n.get("dl_col_info"), width=180)
         self.progress_list.InsertColumn(1, self.i18n.get("dl_col_data"), width=450)
+        widgets.auto_fit_first_column(self.progress_list, column=1, min_width=200)
         self.progress_list.SetMinSize((-1, 180))
         
         self.progress_list.InsertItem(0, self.i18n.get("dl_item_process"))
@@ -287,8 +292,8 @@ class DownloadDialog(wx.Frame):
 
         m_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.cb_installed = wx.Choice(self.panel_manage, choices=[])
-        self.btn_delete = wx.Button(self.panel_manage, label=self.i18n.get("dl_btn_delete"))
-        self.btn_clean_cache = wx.Button(self.panel_manage, label=self.i18n.get("dl_btn_clean_cache"))
+        self.btn_delete = icons.button(wx.Button(self.panel_manage, label=self.i18n.get("dl_btn_delete")), "delete")
+        self.btn_clean_cache = icons.button(wx.Button(self.panel_manage, label=self.i18n.get("dl_btn_clean_cache")), "clear")
         m_sizer.Add(self.cb_installed, 1, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         m_sizer.Add(self.btn_delete, 0, wx.ALL, 5)
         manage_sizer.Add(m_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
@@ -299,9 +304,9 @@ class DownloadDialog(wx.Frame):
         self.panel_manage.SetSizer(manage_sizer)
 
         self.btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.btn_start = wx.Button(self.panel, label=self.i18n.get("btn_start_download"))
-        self.btn_hide = wx.Button(self.panel, label=self.i18n.get("dl_btn_hide"))
-        self.btn_cancel = wx.Button(self.panel, label=self.i18n.get("btn_cancel"))
+        self.btn_start = icons.button(wx.Button(self.panel, label=self.i18n.get("btn_start_download")), "download")
+        self.btn_hide = icons.button(wx.Button(self.panel, label=self.i18n.get("dl_btn_hide")), "hide")
+        self.btn_cancel = icons.button(wx.Button(self.panel, label=self.i18n.get("btn_cancel")), "cancel")
         
         self.btn_start.Disable()
         self.btn_hide.Hide()

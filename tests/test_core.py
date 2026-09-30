@@ -94,7 +94,9 @@ def test_locales_have_same_keys():
     base = os.path.join(BASE_DIR, "locales")
     ar = json.load(open(os.path.join(base, "ar.json"), encoding="utf-8"))
     en = json.load(open(os.path.join(base, "en.json"), encoding="utf-8"))
-    assert set(ar) == set(en)
+    # صيغ المثنى والجمع القليل (_two, _few) خاصة بالعربية، والإنجليزية تستخدم one/many فقط
+    only_ar = {k for k in set(ar) - set(en) if not k.endswith(("_two", "_few"))}
+    assert only_ar == set() and set(en) - set(ar) == set()
 
 
 def test_all_used_keys_exist():
@@ -195,3 +197,10 @@ def test_split_on_gaps():
     parts = list(split_on_gaps([merged, normal]))
     assert [(p.start, p.end, p.text) for p in parts[:2]] == [(55.6, 56.3, "last decade."), (82.0, 83.0, "Finally, wind")]
     assert parts[2] is normal
+
+
+def test_no_ampersand_in_texts():
+    """& في نص زر أو قائمة يتحول لشرطة سفلية (اختصار لوحة مفاتيح) في ويندوز"""
+    for lang in ("ar", "en"):
+        d = json.load(open(os.path.join(BASE_DIR, "locales", f"{lang}.json"), encoding="utf-8"))
+        assert [k for k, v in d.items() if "&" in v] == []

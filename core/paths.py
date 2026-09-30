@@ -36,7 +36,9 @@ def _user_data_dir():
     return os.path.join(base, APP_NAME)
 
 
-DATA_DIR = APP_DIR if is_writable_dir(APP_DIR) else _user_data_dir()
+# متغير البيئة يسمح بتشغيل البرنامج ببيانات منفصلة (للتجربة والاختبارات) دون لمس إعدادات المستخدم
+DATA_DIR = (os.environ.get("AUDIO_TRANSCRIBER_DATA_DIR")
+            or (APP_DIR if is_writable_dir(APP_DIR) else _user_data_dir()))
 
 LOCALES_DIR = os.path.join(RESOURCE_DIR, "locales")
 MODELS_DIR = os.path.join(DATA_DIR, "models")

@@ -1,5 +1,6 @@
 import time
 import wx
+from gui import icons, widgets
 from core.i18n import LocalizationManager
 
 # لا نعرض تقديراً للوقت المتبقي قبل مرور هذه المدة وهذا القدر من التقدم (التقدير المبكر غير دقيق)
@@ -9,10 +10,11 @@ ETA_MIN_PERCENT = 2
 class ProcessingDialog(wx.Dialog):
     def __init__(self, parent, i18n: LocalizationManager):
         # تم إعداد النافذة بحجم مناسب لاحتواء الجدول وشريط التقدم
-        super().__init__(parent, title=i18n.get("dialog_processing_title"), size=(550, 320), 
+        super().__init__(parent, title=i18n.get("dialog_processing_title"), size=(560, 250),
                          style=wx.DEFAULT_DIALOG_STYLE)
         self.i18n = i18n
         i18n.apply_direction(self)
+        widgets.fit_to_screen(self)
         self.parent_win = parent
         self.is_canceling = False
         
@@ -20,7 +22,7 @@ class ProcessingDialog(wx.Dialog):
         if hasattr(parent, 'settings'):
             self.apply_theme(parent.settings.get("theme", "light"))
             
-        self.CenterOnParent()
+        self._place_above_results(parent)
         
         # توجيه التركيز (Focus) فوراً إلى الجدول ليقرأه قارئ الشاشة (NVDA)
         wx.CallAfter(self.list_ctrl.SetFocus)
@@ -32,6 +34,15 @@ class ProcessingDialog(wx.Dialog):
         id_progress = wx.NewIdRef()
         self.Bind(wx.EVT_MENU, self.on_announce_progress, id=id_progress)
         self.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('I'), id_progress)]))
+
+    def _place_above_results(self, parent):
+        """أعلى نافذة البرنامج بدلاً من منتصفها: تبقى قائمة النتائج ظاهرة والجمل تُضاف إليها أثناء التفريغ"""
+        if not parent:
+            self.CenterOnScreen()
+            return
+        px, py = parent.GetScreenPosition()
+        pw, _ = parent.GetSize()
+        self.SetPosition((px + (pw - self.GetSize().width) // 2, py + 60))
 
     def on_announce_progress(self, event):
         if hasattr(self.parent_win, 'on_check_progress'):
@@ -51,24 +62,14 @@ class ProcessingDialog(wx.Dialog):
         main_sizer.Add(self.lbl_title, 0, wx.EXPAND | wx.TOP | wx.BOTTOM, 10)
         
         # 2. الجدول التفاعلي (ListCtrl)
-        self.list_ctrl = wx.ListCtrl(self.panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES | wx.LC_VRULES)
-        self.list_ctrl.InsertColumn(0, self.i18n.get("proc_col_item"), width=150)
-        self.list_ctrl.InsertColumn(1, self.i18n.get("proc_col_status"), width=350)
-        
-        # إدراج الصفوف الافتراضية
-        self.list_ctrl.InsertItem(0, self.i18n.get("proc_item_file"))
-        self.list_ctrl.SetItem(0, 1, self.i18n.get("proc_val_waiting"))
-        
-        # الصف الأول في التركيز يحمل النسبة والخطوة معاً في العمود الأول (اسم العنصر):
-        # قارئ الشاشة ينطق تغيّر اسم العنصر الذي عليه التركيز تلقائياً، بينما لا ينطق تغيّر الأعمدة الأخرى
-        self.list_ctrl.InsertItem(1, f"{self.i18n.get('proc_item_percent')} 0%")
-        self.list_ctrl.SetItem(1, 1, "")
+        # عمود واحد عريض، وكل سطر جملة كاملة: لا يُقص النص بصرياً، وقارئ الشاشة يقرأ السطر كاملاً.
+        # السطر الثاني (عليه التركيز) يتغير اسمه مع التقدم، فينطقه قارئ الشاشة تلقائياً
+        self.list_ctrl = wx.ListCtrl(self.panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_NO_HEADER)
+        self.list_ctrl.InsertColumn(0, self.i18n.get("proc_col_status"), width=500)
+        self.list_ctrl.InsertItem(0, f"{self.i18n.get('proc_item_file')} {self.i18n.get('proc_val_waiting')}")
+        self.list_ctrl.InsertItem(1, f"{self.i18n.get('proc_item_percent')} 0% - {self.i18n.get('status_init_engine').replace('...', '')}")
         self._last_announced = None
-        
-        self.list_ctrl.InsertItem(2, self.i18n.get("proc_item_step"))
-        self.list_ctrl.SetItem(2, 1, self.i18n.get("status_init_engine"))
-        
-        self.list_ctrl.SetMinSize((-1, 110))
+        self.list_ctrl.SetMinSize((-1, 52))
         main_sizer.Add(self.list_ctrl, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 15)
         
         # 3. شريط التقدم المرئي (Gauge)
@@ -82,7 +83,7 @@ class ProcessingDialog(wx.Dialog):
         line = wx.StaticLine(self.panel)
         main_sizer.Add(line, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         
-        self.btn_cancel = wx.Button(self.panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel"))
+        self.btn_cancel = icons.button(wx.Button(self.panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel")), "cancel")
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
         # إغلاق النافذة (زر X أو Esc) يعني إلغاء العملية، بدلاً من إخفائها والعملية مستمرة
         self.Bind(wx.EVT_CLOSE, self.on_cancel)
@@ -103,9 +104,7 @@ class ProcessingDialog(wx.Dialog):
         eta = self._estimate_remaining(percent, filename)
         eta_text = self.format_eta(eta) if eta is not None else ""
 
-        # تحديث بيانات الجدول التفاعلي
-        self.list_ctrl.SetItem(0, 1, display_name)
-        self.list_ctrl.SetItem(2, 1, f"{status} {eta_text}".strip())
+        self.list_ctrl.SetItemText(0, f"{self.i18n.get('proc_item_file')} {display_name}")
 
         # الإعلان كل 10% أو عند تغيّر الخطوة فقط، حتى لا يقاطع قارئ الشاشة المستخدم مع كل 1%
         clean_status = status.replace("...", "").strip()
@@ -114,6 +113,7 @@ class ProcessingDialog(wx.Dialog):
             self._last_announced = announcement
             parts = [f"{self.i18n.get('proc_item_percent')} {percent}%", clean_status, eta_text]
             self.list_ctrl.SetItemText(1, " - ".join(p for p in parts if p))
+        widgets.fit_first_column(self.list_ctrl, min_width=100)
         
         # عنوان النافذة يعرض الحالة الحالية (يُقرأ عند طلبه بـ NVDA+T)
         window_title_announcement = f"{percent}% - {clean_status} - {self.i18n.get('dialog_processing_title')}"
@@ -140,9 +140,13 @@ class ProcessingDialog(wx.Dialog):
         minutes = int(round(seconds / 60))
         if minutes < 1:
             return self.i18n.get("eta_less_than_minute")
-        if minutes < 60:
-            return self.i18n.get("eta_minutes", minutes=minutes)
-        return self.i18n.get("eta_hours", hours=minutes // 60, minutes=minutes % 60)
+        hours, mins = divmod(minutes, 60)
+        parts = []
+        if hours:
+            parts.append(self.i18n.plural("unit_hours", hours))
+        if mins:
+            parts.append(self.i18n.plural("unit_minutes", mins))
+        return self.i18n.get("eta_about", time=self.i18n.get("word_and").join(parts))
 
     def on_cancel(self, event):
         if self.is_canceling:
@@ -152,8 +156,8 @@ class ProcessingDialog(wx.Dialog):
         
         # إعلام المستخدم بالإلغاء في الجدول وعنوان النافذة
         cancel_msg = self.i18n.get("proc_step_cancel")
-        self.list_ctrl.SetItem(2, 1, cancel_msg)
-        self.list_ctrl.SetItemBackgroundColour(2, wx.Colour(255, 230, 230)) # تمييز صف الإلغاء بلون مختلف
+        self.list_ctrl.SetItemText(1, cancel_msg)
+        self.list_ctrl.SetItemBackgroundColour(1, wx.Colour(255, 230, 230)) # تمييز صف الإلغاء بلون مختلف
         
         self.SetTitle(cancel_msg)
         self.gauge.Pulse() 
@@ -184,5 +188,10 @@ class ProcessingDialog(wx.Dialog):
         # تلوين الجدول (ListCtrl)
         self.list_ctrl.SetBackgroundColour(list_bg)
         self.list_ctrl.SetForegroundColour(fg_color)
+
+        # زر الإلغاء بنفس ألوان المظهر، وإلا تختفي أيقونته الفاتحة على خلفية الزر الفاتحة
+        self.btn_cancel.SetBackgroundColour(wx.Colour(30, 38, 54) if theme == "dark" else wx.Colour(255, 255, 255))
+        self.btn_cancel.SetForegroundColour(fg_color)
+        icons.button(self.btn_cancel, "cancel", theme=theme)
             
         self.Refresh()

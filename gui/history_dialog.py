@@ -1,4 +1,5 @@
 import wx
+from gui import icons, widgets
 from core.i18n import LocalizationManager
 from core.transcription_logger import TranscriptionLogger
 
@@ -7,6 +8,7 @@ class HistoryDialog(wx.Dialog):
         super().__init__(parent, title=i18n.get("history_title"), size=(850, 500), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
         self.i18n = i18n
         i18n.apply_direction(self)
+        widgets.fit_to_screen(self)
         self.logger = TranscriptionLogger(i18n)
         self.setup_ui()
         self.load_history()
@@ -25,18 +27,20 @@ class HistoryDialog(wx.Dialog):
 
         sizer.Add(wx.StaticText(panel, label=self.i18n.get("lbl_history_list")), 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         self.list_ctrl = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
-        self.list_ctrl.InsertColumn(0, self.i18n.get("history_col_date"), width=150)
-        self.list_ctrl.InsertColumn(1, self.i18n.get("history_col_file"), width=300)
-        self.list_ctrl.InsertColumn(2, self.i18n.get("report_audio_duration").rstrip(":"), width=110)
+        self.list_ctrl.InsertColumn(0, self.i18n.get("history_col_date"), width=130)
+        self.list_ctrl.InsertColumn(1, self.i18n.get("history_col_file"), width=200)
+        self.list_ctrl.InsertColumn(2, self.i18n.get("report_audio_duration").rstrip(":"), width=140)
         self.list_ctrl.InsertColumn(3, self.i18n.get("history_col_duration"), width=110)
         self.list_ctrl.InsertColumn(4, self.i18n.get("history_col_words"), width=90)
-        self.list_ctrl.InsertColumn(5, self.i18n.get("history_col_status"), width=120)
+        self.list_ctrl.InsertColumn(5, self.i18n.get("history_col_status"), width=130)
+        # عمود اسم الملف يأخذ العرض المتبقي
+        widgets.auto_fit_first_column(self.list_ctrl, column=1, min_width=120)
 
         sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 10)
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.btn_clear = wx.Button(panel, label=self.i18n.get("btn_clear_history"))
-        btn_close = wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_close"))
+        self.btn_clear = icons.button(wx.Button(panel, label=self.i18n.get("btn_clear_history")), "clear", theme="light")
+        btn_close = icons.button(wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_close")), "close", theme="light")
         btn_sizer.Add(self.btn_clear, 0, wx.ALL, 5)
         btn_sizer.AddStretchSpacer(1)
         btn_sizer.Add(btn_close, 0, wx.ALL, 5)
