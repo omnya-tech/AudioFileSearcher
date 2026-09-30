@@ -23,6 +23,9 @@ from gui.search_panel import CrossFileSearchPanel
 from gui.processing_dialog import ProcessingDialog
 from gui.edit_segment_dialog import EditSegmentDialog
 
+# علامة BOM في أول ملفات النص والترجمة: بدونها تعرض بعض المشغلات والتلفزيونات القديمة العربي كرموز غريبة
+TEXT_EXPORT_ENCODING = "utf-8-sig"
+
 # كل كم ثانية يُحفظ التقدم على القرص أثناء التفريغ
 RECOVERY_SAVE_INTERVAL = 5
 
@@ -581,6 +584,30 @@ class MainWindow(wx.Frame):
             recovery.save(self.audio_path, self.all_segments, getattr(self, "_audio_duration", 0))
             self._last_recovery_save = time.time()
 
+    def start_instance_inbox(self):
+        """استقبال الملفات التي تُفتح من نسخة ثانية للبرنامج (انظر core/single_instance.py)"""
+        self._inbox_timer = wx.Timer(self)
+        self.Bind(wx.EVT_TIMER, self._on_inbox_timer, self._inbox_timer)
+        self._inbox_timer.Start(700)
+
+    def _on_inbox_timer(self, event):
+        from core import single_instance
+        for paths in single_instance.take_requests():
+            self.bring_to_front()
+            if paths:
+                if self.transcription_thread_running():
+                    wx.MessageBox(self.i18n.get("msg_busy_try_later"), self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
+                else:
+                    self.on_files_dropped(paths)
+
+    def bring_to_front(self):
+        if self.IsIconized():
+            self.Iconize(False)
+        self.Show()
+        self.Raise()
+        # ويندوز قد يمنع برنامجاً من أخذ التركيز بنفسه، فنومض زره في شريط المهام على الأقل
+        self.RequestUserAttention()
+
     def check_pending_recovery(self):
         """عند فتح البرنامج: لو فيه تفريغ لم يكتمل (إغلاق مفاجئ أو إلغاء) نعرض استكماله"""
         pending = recovery.list_pending()
@@ -994,16 +1021,16 @@ class MainWindow(wx.Frame):
         return True
 
     def _write_txt(self, path):
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, 'w', encoding=TEXT_EXPORT_ENCODING) as f:
             f.write("\n\n".join(item[1].strip() for item in self.all_segments))
 
     def _write_srt(self, path):
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, 'w', encoding=TEXT_EXPORT_ENCODING) as f:
             for i, item in enumerate(self.all_segments, 1):
                 f.write(f"{i}\n{format_srt_time(item[2])} --> {format_srt_time(item[3])}\n{item[1]}\n\n")
 
     def _write_vtt(self, path):
-        with open(path, 'w', encoding='utf-8') as f:
+        with open(path, 'w', encoding=TEXT_EXPORT_ENCODING) as f:
             f.write("WEBVTT\n\n")
             for i, item in enumerate(self.all_segments, 1):
                 f.write(f"{i}\n{format_srt_time(item[2], '.')} --> {format_srt_time(item[3], '.')}\n{item[1]}\n\n")
@@ -1060,6 +1087,8 @@ class MainWindow(wx.Frame):
 
         if self.transcription_thread:
             self.transcription_thread.abort()
+        if getattr(self, "_inbox_timer", None):
+            self._inbox_timer.Stop()
         self.i18n.remove_observer(self.refresh_ui_texts)
         self.audio_player.cleanup()
         try:

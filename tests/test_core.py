@@ -173,3 +173,13 @@ def test_recovery_save_load_and_invalidate(tmp_path):
     recovery.save(str(audio), segs, 60.0)
     recovery.delete(str(audio))
     assert recovery.load(str(audio)) is None and recovery.list_pending() == []
+
+
+def test_single_instance_messages(tmp_path, monkeypatch):
+    from core import single_instance as si
+    monkeypatch.setattr(si, "INBOX_DIR", str(tmp_path / "inbox"))
+    assert si.send_request([str(tmp_path / "a.mp3")])
+    assert si.send_request([])                       # فتح البرنامج بدون ملف: إظهار النافذة فقط
+    reqs = si.take_requests()
+    assert reqs == [[str(tmp_path / "a.mp3")], []]
+    assert si.take_requests() == []                  # كل طلب يُقرأ مرة واحدة فقط

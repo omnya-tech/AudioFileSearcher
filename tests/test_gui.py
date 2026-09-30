@@ -229,3 +229,11 @@ def test_report_speed_tip(main_window, i18n):
     tip_start = i18n.get("report_speed_tip", factor="X")[:15]
     assert tip_start in ReportDialog(main_window, i18n, slow)._summary_text()
     assert tip_start not in ReportDialog(main_window, i18n, fast)._summary_text()
+
+
+@pytest.mark.parametrize("fmt", ["srt", "txt", "vtt"])
+def test_text_exports_have_bom(main_window, tmp_path, fmt):
+    load_segments(main_window)
+    path = tmp_path / f"out.{fmt}"
+    main_window.save_as(str(path), fmt, show_msg=False)
+    assert path.read_bytes().startswith(b"\xef\xbb\xbf")

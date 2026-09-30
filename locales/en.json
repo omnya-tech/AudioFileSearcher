@@ -308,5 +308,6 @@
   "eta_less_than_minute": "less than a minute left",
   "eta_minutes": "about {minutes} min left",
   "eta_hours": "about {hours} h {minutes} min left",
-  "report_speed_tip": "Note: transcription took about {factor}x the audio length on this computer. If speed matters more than accuracy, try a smaller model such as small (Settings, Ctrl+P) after downloading it (Ctrl+D). A graphics card (GPU) is much faster if available."
+  "report_speed_tip": "Note: transcription took about {factor}x the audio length on this computer. If speed matters more than accuracy, try a smaller model such as small (Settings, Ctrl+P) after downloading it (Ctrl+D). A graphics card (GPU) is much faster if available.",
+  "msg_busy_try_later": "The program is busy transcribing. Open the new file after the current transcription finishes."
 }
