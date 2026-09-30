@@ -288,5 +288,15 @@
   "lbl_model_details": "تفاصيل النموذج:",
   "lbl_download_progress": "تقدم التحميل:",
   "lbl_model_state": "حالة النموذج:",
-  "chk_export_format": "السماح بالتصدير بصيغة {fmt}"
+  "chk_export_format": "السماح بالتصدير بصيغة {fmt}",
+  "menu_shortcuts": "اختصارات لوحة المفاتيح",
+  "shortcuts_menus_title": "اختصارات عامة (تعمل من النافذة الرئيسية):",
+  "shortcuts_more_title": "اختصارات داخل القوائم والنوافذ:",
+  "shortcut_enter_play": "Enter على سطر في النتائج: تشغيل المقطع من بدايته.",
+  "shortcut_context_menu": "مفتاح القائمة أو Shift+F10 على سطر: قائمة التشغيل والتعديل.",
+  "shortcut_switch_tabs": "Ctrl+Tab و Ctrl+Shift+Tab: التنقل بين تبويب التفريغ وتبويب البحث الشامل.",
+  "shortcut_edit_dialog": "في نافذة تعديل النص: F5 لسماع المقطع، Ctrl+Enter للحفظ، Esc للإلغاء.",
+  "shortcut_processing": "في نافذة المعالجة: Ctrl+I لسماع نسبة التقدم، Esc لإلغاء التفريغ. النسبة تُعلن تلقائياً كل 10%.",
+  "shortcut_dict_delete": "في القاموس المخصص: Enter لإضافة الكلمة، Delete لحذف الكلمة المحددة.",
+  "shortcut_escape": "Esc: إغلاق أي نافذة فرعية دون حفظ."
 }

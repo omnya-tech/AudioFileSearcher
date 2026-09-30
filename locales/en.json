@@ -288,5 +288,15 @@
   "lbl_model_details": "Model details:",
   "lbl_download_progress": "Download progress:",
   "lbl_model_state": "Model status:",
-  "chk_export_format": "Allow exporting as {fmt}"
+  "chk_export_format": "Allow exporting as {fmt}",
+  "menu_shortcuts": "Keyboard shortcuts",
+  "shortcuts_menus_title": "General shortcuts (main window):",
+  "shortcuts_more_title": "Shortcuts inside lists and windows:",
+  "shortcut_enter_play": "Enter on a result line: play that segment.",
+  "shortcut_context_menu": "Applications key or Shift+F10 on a line: play/edit menu.",
+  "shortcut_switch_tabs": "Ctrl+Tab / Ctrl+Shift+Tab: switch between the Transcription and Search tabs.",
+  "shortcut_edit_dialog": "In the edit window: F5 to listen, Ctrl+Enter to save, Esc to cancel.",
+  "shortcut_processing": "In the processing window: Ctrl+I for progress, Esc to cancel. Progress is announced every 10%.",
+  "shortcut_dict_delete": "In the custom dictionary: Enter to add, Delete to remove the selected word.",
+  "shortcut_escape": "Esc: close any dialog without saving."
 }

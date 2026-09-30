@@ -152,3 +152,23 @@ def test_playable_copy_converts_audio(main_window, tmp_path):
     with wave.open(out, "rb") as w:
         assert w.getnframes() > 20000   # ثانية واحدة بمعدل 22050
     assert main_window.audio_player._playable_copy(str(src)) == out   # يُعاد استخدام النسخة
+
+
+def test_shortcuts_help_lists_menu_shortcuts(main_window):
+    text = main_window.shortcuts_text()
+    for key in ("Ctrl+O", "Ctrl+P", "Ctrl+F", "F2", "F3", "F1"):
+        assert key in text
+    from gui.text_dialog import TextDialog
+    TextDialog(main_window, main_window.i18n, "x", text).Destroy()
+
+
+def test_progress_row_announces_every_ten_percent(main_window, i18n):
+    from gui.processing_dialog import ProcessingDialog
+    dlg = ProcessingDialog(main_window, i18n)
+    names = []
+    for pct in (0, 3, 7, 12, 25, 29):
+        dlg.update_progress(pct, 100, "جاري استخراج وتحليل النصوص...", "a.mp3")
+        names.append(dlg.list_ctrl.GetItemText(1))
+    # يتغير اسم السطر (فيُنطق) عند كل عشرة جديدة فقط
+    assert len(dict.fromkeys(names)) == 3
+    dlg.Destroy()

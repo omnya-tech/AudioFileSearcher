@@ -145,7 +145,8 @@ class MainWindow(wx.Frame):
             "mi_settings": self.i18n.get("menu_settings") + "\tCtrl+P",
             "mi_download_model": self.i18n.get("menu_download_model") + "\tCtrl+D",
             "mi_custom_dict": self.i18n.get("btn_custom_dictionary") + "\tCtrl+K",
-            "mi_about": self.i18n.get("menu_about") + "\tF1",
+            "mi_shortcuts": self.i18n.get("menu_shortcuts") + "\tF1",
+            "mi_about": self.i18n.get("menu_about"),
         }
 
     def setup_menu(self):
@@ -177,6 +178,7 @@ class MainWindow(wx.Frame):
         self.mi_custom_dict = tools_menu.Append(wx.ID_ANY, labels["mi_custom_dict"])
 
         help_menu = wx.Menu()
+        self.mi_shortcuts = help_menu.Append(wx.ID_ANY, labels["mi_shortcuts"])
         self.mi_about = help_menu.Append(wx.ID_ANY, labels["mi_about"])
 
         menubar.Append(file_menu, self.i18n.get("menu_file"))
@@ -198,6 +200,7 @@ class MainWindow(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_open_download_dialog, self.mi_download_model)
         self.Bind(wx.EVT_MENU, self.on_open_custom_dict, self.mi_custom_dict)
         self.Bind(wx.EVT_MENU, self.on_open_history, self.mi_history)
+        self.Bind(wx.EVT_MENU, self.on_shortcuts, self.mi_shortcuts)
         self.Bind(wx.EVT_MENU, self.on_about, self.mi_about)
         self.Bind(wx.EVT_MENU, self.on_exit, self.mi_exit)
 
@@ -340,6 +343,25 @@ class MainWindow(wx.Frame):
 
     def on_open_custom_dict(self, event):
         dlg = CustomDictDialog(self, self.i18n, self.settings)
+        dlg.ShowModal()
+        dlg.Destroy()
+
+    def shortcuts_text(self):
+        """قائمة الاختصارات تُبنى من القوائم نفسها، فتبقى صحيحة لو تغيّر أي اختصار"""
+        lines = [self.i18n.get("shortcuts_menus_title")]
+        for label in self._menu_labels().values():
+            if "\t" in label:
+                name, key = label.split("\t", 1)
+                lines.append(f"{key}: {name}")
+        lines += ["", self.i18n.get("shortcuts_more_title")]
+        lines += [self.i18n.get(k) for k in ("shortcut_enter_play", "shortcut_context_menu", "shortcut_switch_tabs",
+                                             "shortcut_edit_dialog", "shortcut_processing", "shortcut_dict_delete",
+                                             "shortcut_escape")]
+        return "\n".join(lines)
+
+    def on_shortcuts(self, event):
+        from gui.text_dialog import TextDialog
+        dlg = TextDialog(self, self.i18n, self.i18n.get("menu_shortcuts"), self.shortcuts_text())
         dlg.ShowModal()
         dlg.Destroy()
 

@@ -19,7 +19,8 @@ class ProcessingDialog(wx.Dialog):
         
         # توجيه التركيز (Focus) فوراً إلى الجدول ليقرأه قارئ الشاشة (NVDA)
         wx.CallAfter(self.list_ctrl.SetFocus)
-        wx.CallAfter(self.list_ctrl.Select, 0)
+        wx.CallAfter(self.list_ctrl.Focus, 1)
+        wx.CallAfter(self.list_ctrl.Select, 1)
 
         # Ctrl+I يعلن نسبة التقدم من داخل هذه النافذة أيضاً (اختصارات النافذة الرئيسية لا تعمل هنا).
         # هذه النافذة بلا قوائم، فلا خطر من أن يستبدل جدول الاختصارات اختصارات أخرى
@@ -53,8 +54,11 @@ class ProcessingDialog(wx.Dialog):
         self.list_ctrl.InsertItem(0, self.i18n.get("proc_item_file"))
         self.list_ctrl.SetItem(0, 1, self.i18n.get("proc_val_waiting"))
         
-        self.list_ctrl.InsertItem(1, self.i18n.get("proc_item_percent"))
-        self.list_ctrl.SetItem(1, 1, "0%")
+        # الصف الأول في التركيز يحمل النسبة والخطوة معاً في العمود الأول (اسم العنصر):
+        # قارئ الشاشة ينطق تغيّر اسم العنصر الذي عليه التركيز تلقائياً، بينما لا ينطق تغيّر الأعمدة الأخرى
+        self.list_ctrl.InsertItem(1, f"{self.i18n.get('proc_item_percent')} 0%")
+        self.list_ctrl.SetItem(1, 1, "")
+        self._last_announced = None
         
         self.list_ctrl.InsertItem(2, self.i18n.get("proc_item_step"))
         self.list_ctrl.SetItem(2, 1, self.i18n.get("status_init_engine"))
@@ -93,11 +97,16 @@ class ProcessingDialog(wx.Dialog):
         
         # تحديث بيانات الجدول التفاعلي
         self.list_ctrl.SetItem(0, 1, display_name)
-        self.list_ctrl.SetItem(1, 1, f"{percent}%")
         self.list_ctrl.SetItem(2, 1, status)
+
+        # الإعلان كل 10% أو عند تغيّر الخطوة فقط، حتى لا يقاطع قارئ الشاشة المستخدم مع كل 1%
+        clean_status = status.replace("...", "").strip()
+        announcement = (percent // 10 * 10, clean_status)
+        if announcement != self._last_announced:
+            self._last_announced = announcement
+            self.list_ctrl.SetItemText(1, f"{self.i18n.get('proc_item_percent')} {percent}% - {clean_status}")
         
-        # تحديث عنوان النافذة ليقرأه NVDA تلقائياً دون تدخل من المستخدم
-        clean_status = status.replace("...", "")
+        # عنوان النافذة يعرض الحالة الحالية (يُقرأ عند طلبه بـ NVDA+T)
         window_title_announcement = f"{percent}% - {clean_status} - {self.i18n.get('dialog_processing_title')}"
         self.SetTitle(window_title_announcement)
         

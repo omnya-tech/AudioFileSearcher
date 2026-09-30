@@ -89,7 +89,8 @@ def main():
         open_and_dump(proc.pid, main_win, "#2->#0", "الإعدادات", tabs=4)
         open_and_dump(proc.pid, main_win, "#2->#3", "القاموس المخصص")
         open_and_dump(proc.pid, main_win, "#1->#7", "السجل")
-        open_and_dump(proc.pid, main_win, "#3->#0", "حول البرنامج")
+        open_and_dump(proc.pid, main_win, "#3->#0", "اختصارات لوحة المفاتيح")
+        open_and_dump(proc.pid, main_win, "#3->#1", "حول البرنامج")
         open_and_dump(proc.pid, main_win, "#2->#2", "إدارة النماذج", close="%{F4}")
     finally:
         proc.kill()
