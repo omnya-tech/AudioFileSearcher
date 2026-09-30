@@ -1,6 +1,11 @@
 import wx
 from core.i18n import LocalizationManager
 
+# نصيحة النموذج الأسرع تظهر لو التفريغ أخذ أكثر من ضعف ونصف مدة الصوت، في ملف أطول من دقيقة
+SLOW_RATIO = 1 / 1.5
+SLOW_TIP_MIN_AUDIO = 60
+
+
 class ReportDialog(wx.Dialog):
     def __init__(self, parent, i18n: LocalizationManager, report_data: dict):
         super().__init__(parent, title=i18n.get("report_title"), size=(700, 600), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
@@ -27,9 +32,14 @@ class ReportDialog(wx.Dialog):
 
         audio_sec = audio_info.get('duration_seconds', 0) or 0
         proc_sec = proc.get('total_seconds', 0) or 0
+        slow_tip = None
         if audio_sec > 0 and proc_sec > 0:
             # كم ثانية صوت تتم معالجتها في كل ثانية (أكبر من 1 = أسرع من الزمن الحقيقي)
-            lines.append(f"{g('report_speed_ratio')} {audio_sec / proc_sec:.2f}x")
+            ratio = audio_sec / proc_sec
+            lines.append(f"{g('report_speed_ratio')} {ratio:.2f}x")
+            # التفريغ أبطأ بوضوح من مدة الصوت، والملف طويل بما يكفي ليفرق ذلك مع المستخدم
+            if ratio < SLOW_RATIO and audio_sec >= SLOW_TIP_MIN_AUDIO:
+                slow_tip = g('report_speed_tip', factor=f"{1 / ratio:.1f}")
 
         lines += [
             f"{g('history_col_status')}: {r.get('status', unknown)}",
@@ -44,6 +54,9 @@ class ReportDialog(wx.Dialog):
         errors = r.get('errors', [])
         if errors:
             lines += ["", f"{g('history_status_errors')}:"] + errors
+
+        if slow_tip:
+            lines += ["", slow_tip]
 
         warnings = r.get('warnings', [])
         if warnings:

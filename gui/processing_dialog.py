@@ -1,5 +1,10 @@
+import time
 import wx
 from core.i18n import LocalizationManager
+
+# لا نعرض تقديراً للوقت المتبقي قبل مرور هذه المدة وهذا القدر من التقدم (التقدير المبكر غير دقيق)
+ETA_MIN_SECONDS = 15
+ETA_MIN_PERCENT = 2
 
 class ProcessingDialog(wx.Dialog):
     def __init__(self, parent, i18n: LocalizationManager):
@@ -95,22 +100,49 @@ class ProcessingDialog(wx.Dialog):
         # تقصير اسم الملف إذا كان طويلاً جداً ليتناسب مع عرض الجدول
         display_name = filename if len(filename) <= 45 else filename[:20] + "..." + filename[-20:]
         
+        eta = self._estimate_remaining(percent, filename)
+        eta_text = self.format_eta(eta) if eta is not None else ""
+
         # تحديث بيانات الجدول التفاعلي
         self.list_ctrl.SetItem(0, 1, display_name)
-        self.list_ctrl.SetItem(2, 1, status)
+        self.list_ctrl.SetItem(2, 1, f"{status} {eta_text}".strip())
 
         # الإعلان كل 10% أو عند تغيّر الخطوة فقط، حتى لا يقاطع قارئ الشاشة المستخدم مع كل 1%
         clean_status = status.replace("...", "").strip()
         announcement = (percent // 10 * 10, clean_status)
         if announcement != self._last_announced:
             self._last_announced = announcement
-            self.list_ctrl.SetItemText(1, f"{self.i18n.get('proc_item_percent')} {percent}% - {clean_status}")
+            parts = [f"{self.i18n.get('proc_item_percent')} {percent}%", clean_status, eta_text]
+            self.list_ctrl.SetItemText(1, " - ".join(p for p in parts if p))
         
         # عنوان النافذة يعرض الحالة الحالية (يُقرأ عند طلبه بـ NVDA+T)
         window_title_announcement = f"{percent}% - {clean_status} - {self.i18n.get('dialog_processing_title')}"
         self.SetTitle(window_title_announcement)
         
         self.panel.Layout()
+
+    def _estimate_remaining(self, percent, filename):
+        """الوقت المتبقي بالثواني من سرعة التقدم الفعلية منذ بداية الملف الحالي (أو منذ نقطة الاستكمال)"""
+        now = time.time()
+        start = getattr(self, "_eta_start", None)
+        # بداية ملف جديد (وضع المجلد) أو أول تقدم فعلي: نعيد ضبط نقطة القياس
+        if start is None or start[0] != filename or percent < start[2]:
+            self._eta_start = (filename, now, percent)
+            return None
+        _, t0, p0 = start
+        done = percent - p0
+        elapsed = now - t0
+        if done < ETA_MIN_PERCENT or elapsed < ETA_MIN_SECONDS or percent >= 100:
+            return None
+        return elapsed * (100 - percent) / done
+
+    def format_eta(self, seconds):
+        minutes = int(round(seconds / 60))
+        if minutes < 1:
+            return self.i18n.get("eta_less_than_minute")
+        if minutes < 60:
+            return self.i18n.get("eta_minutes", minutes=minutes)
+        return self.i18n.get("eta_hours", hours=minutes // 60, minutes=minutes % 60)
 
     def on_cancel(self, event):
         if self.is_canceling:

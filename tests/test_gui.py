@@ -205,3 +205,27 @@ def test_cancel_saves_partial_and_resume_prompt(main_window, tmp_path, monkeypat
     monkeypatch.setattr(wx.MessageDialog, "ShowModal", lambda self: wx.ID_NO)
     proceed, segs = main_window._ask_resume(str(audio))
     assert proceed and segs is None and recovery.load(str(audio)) is None
+
+
+def test_eta_estimate(main_window, i18n, monkeypatch):
+    import gui.processing_dialog as pd
+    clock = [1000.0]
+    monkeypatch.setattr(pd.time, "time", lambda: clock[0])
+    dlg = pd.ProcessingDialog(main_window, i18n)
+    dlg.update_progress(10, 100, "x", "a.mp3")          # نقطة البداية
+    clock[0] += 60
+    dlg.update_progress(20, 100, "x", "a.mp3")          # 10% في دقيقة => 80% في 8 دقائق
+    assert dlg._estimate_remaining(20, "a.mp3") == pytest.approx(480)
+    assert "8" in dlg.list_ctrl.GetItemText(1)
+    assert dlg.format_eta(30) == i18n.get("eta_less_than_minute")
+    assert dlg.format_eta(3 * 3600 + 5 * 60) == i18n.get("eta_hours", hours=3, minutes=5)
+    dlg.Destroy()
+
+
+def test_report_speed_tip(main_window, i18n):
+    from gui.report_dialog import ReportDialog
+    slow = {"audio_info": {"duration_seconds": 3600}, "processing_time": {"total_seconds": 7200}}
+    fast = {"audio_info": {"duration_seconds": 3600}, "processing_time": {"total_seconds": 1800}}
+    tip_start = i18n.get("report_speed_tip", factor="X")[:15]
+    assert tip_start in ReportDialog(main_window, i18n, slow)._summary_text()
+    assert tip_start not in ReportDialog(main_window, i18n, fast)._summary_text()

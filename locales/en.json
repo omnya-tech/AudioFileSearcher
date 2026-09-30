@@ -304,5 +304,9 @@
   "msg_canceled_saved": "Transcription canceled. The part done so far (up to {reached}) is saved and shown; press Start to continue from there.",
   "btn_resume": "Continue",
   "btn_restart": "Start over",
-  "btn_later": "Later"
+  "btn_later": "Later",
+  "eta_less_than_minute": "less than a minute left",
+  "eta_minutes": "about {minutes} min left",
+  "eta_hours": "about {hours} h {minutes} min left",
+  "report_speed_tip": "Note: transcription took about {factor}x the audio length on this computer. If speed matters more than accuracy, try a smaller model such as small (Settings, Ctrl+P) after downloading it (Ctrl+D). A graphics card (GPU) is much faster if available."
 }
