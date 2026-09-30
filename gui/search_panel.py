@@ -1,0 +1,144 @@
+﻿import threading
+import wx
+from core.i18n import LocalizationManager
+from core.cross_file_search import CrossFileSearcher, find_audio_for
+
+EVT_SEARCH_DONE_ID = wx.NewIdRef()
+
+class SearchDoneEvent(wx.PyEvent):
+    def __init__(self, results, token):
+        super().__init__()
+        self.SetEventType(EVT_SEARCH_DONE_ID)
+        self.results = results
+        self.token = token
+
+
+class CrossFileSearchPanel(wx.Panel):
+    def __init__(self, parent, i18n: LocalizationManager, play_callback=None):
+        super().__init__(parent)
+        self.i18n = i18n
+        self.play_callback = play_callback
+        self.searcher = CrossFileSearcher()
+        self.search_dir = ""
+        self.results = []
+        # ط±ظ‚ظ… ط¢ط®ط± ط¹ظ…ظ„ظٹط© ط¨ط­ط«: ط£ظٹ ظ†طھظٹط¬ط© ظ…ظ† ط¨ط­ط« ط£ظ‚ط¯ظ… ظٹطھظ… طھط¬ط§ظ‡ظ„ظ‡ط§
+        self._search_token = 0
+        self.setup_ui()
+        self.Connect(-1, -1, EVT_SEARCH_DONE_ID, self.on_search_done)
+
+    def setup_ui(self):
+        sizer = wx.BoxSizer(wx.VERTICAL)
+
+        top_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.btn_folder = wx.Button(self, label=self.i18n.get("btn_select_search_folder"))
+        self.txt_query = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.txt_query.SetHint(self.i18n.get("hint_search_global"))
+        self.btn_search = wx.Button(self, label=self.i18n.get("btn_search"))
+
+        top_sizer.Add(self.btn_folder, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        top_sizer.Add(self.txt_query, 1, wx.ALL | wx.EXPAND, 5)
+        top_sizer.Add(self.btn_search, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+
+        sizer.Add(top_sizer, 0, wx.EXPAND | wx.ALL, 5)
+
+        self.txt_folder = wx.TextCtrl(self, style=wx.TE_READONLY)
+        self.txt_folder.SetValue(self.i18n.get("hint_no_folder_selected"))
+        sizer.Add(self.txt_folder, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+
+        self.list_ctrl = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
+        self._insert_columns()
+        sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 5)
+
+        self.lbl_status = wx.StaticText(self, label="")
+        sizer.Add(self.lbl_status, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        self.SetSizer(sizer)
+
+        self.btn_folder.Bind(wx.EVT_BUTTON, self.on_select_folder)
+        self.btn_search.Bind(wx.EVT_BUTTON, self.on_search)
+        self.txt_query.Bind(wx.EVT_TEXT_ENTER, self.on_search)
+        self.list_ctrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_item_activated)
+
+    def _insert_columns(self):
+        self.list_ctrl.InsertColumn(0, self.i18n.get("col_file_name"), width=200)
+        self.list_ctrl.InsertColumn(1, self.i18n.get("col_time"), width=150)
+        self.list_ctrl.InsertColumn(2, self.i18n.get("col_text_snippet"), width=500)
+
+    def refresh_ui_texts(self):
+        self.btn_folder.SetLabel(self.i18n.get("btn_select_search_folder"))
+        self.txt_query.SetHint(self.i18n.get("hint_search_global"))
+        self.btn_search.SetLabel(self.i18n.get("btn_search"))
+        if not self.search_dir:
+            self.txt_folder.SetValue(self.i18n.get("hint_no_folder_selected"))
+        self.list_ctrl.ClearAll()
+        self._insert_columns()
+        self._show_results(self.results)
+        self.lbl_status.SetLabel("")
+        self.Layout()
+
+    def on_select_folder(self, event):
+        dlg = wx.DirDialog(self, self.i18n.get("dialog_select_search_folder"), style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
+        if dlg.ShowModal() == wx.ID_OK:
+            self.search_dir = dlg.GetPath()
+            self.txt_folder.SetValue(self.search_dir)
+            self.txt_query.SetFocus()
+        dlg.Destroy()
+
+    def on_search(self, event):
+        query = self.txt_query.GetValue().strip()
+        if not self.search_dir:
+            wx.MessageBox(self.i18n.get("msg_select_folder_first"), self.i18n.get("dialog_warning_title"), wx.ICON_WARNING)
+            return
+        if not query: return
+
+        self._search_token += 1
+        token = self._search_token
+        self.list_ctrl.DeleteAllItems()
+        self.results = []
+        self.lbl_status.SetLabel(self.i18n.get("status_searching"))
+
+        folder = self.search_dir
+        is_stale = lambda: token != self._search_token
+
+        def worker():
+            results = self.searcher.search_in_directory(folder, query, should_stop=is_stale)
+            try:
+                wx.PostEvent(self, SearchDoneEvent(results, token))
+            except RuntimeError:
+                pass  # ط§ظ„ظ†ط§ظپط°ط© ط£ظڈط؛ظ„ظ‚طھ ط£ط«ظ†ط§ط، ط§ظ„ط¨ط­ط«
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_search_done(self, event):
+        if event.token != self._search_token:
+            return
+        self.results = event.results
+        self._show_results(self.results)
+        if self.results:
+            self.lbl_status.SetLabel(self.i18n.get("status_found_results", count=len(self.results)))
+            self.list_ctrl.SetFocus()
+            self.list_ctrl.Select(0)
+        else:
+            self.lbl_status.SetLabel(self.i18n.get("status_no_results"))
+        self.Layout()
+
+    def _show_results(self, results):
+        self.list_ctrl.Freeze()
+        try:
+            self.list_ctrl.DeleteAllItems()
+            for idx, res in enumerate(results):
+                self.list_ctrl.InsertItem(idx, res.get("file_name", ""))
+                self.list_ctrl.SetItem(idx, 1, res.get("time_str", ""))
+                self.list_ctrl.SetItem(idx, 2, res.get("text", ""))
+        finally:
+            self.list_ctrl.Thaw()
+
+    def on_item_activated(self, event):
+        idx = event.GetIndex()
+        if not (0 <= idx < len(self.results)) or not self.play_callback:
+            return
+        res = self.results[idx]
+        audio = find_audio_for(res["file_path"])
+        if not audio:
+            wx.MessageBox(self.i18n.get("msg_audio_not_found"), self.i18n.get("dialog_warning_title"), wx.ICON_WARNING)
+            return
+        self.play_callback(audio, res.get("start") or 0)

@@ -1,0 +1,6 @@
+wxPython>=4.2
+faster-whisper>=1.0
+huggingface_hub
+pygame>=2.5
+psutil
+python-docx

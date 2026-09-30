@@ -1,0 +1,10 @@
+# النماذج كبيرة جداً (جيجابايتات) وتتحمل من داخل البرنامج
+models/
+logs/
+output/
+__pycache__/
+*.pyc
+config.json.tmp
+build/
+dist/
+.pytest_cache/
