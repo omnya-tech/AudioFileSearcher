@@ -8,8 +8,10 @@ from core.i18n import LocalizationManager
 from core.settings import SettingsManager
 from core.audio_processor import TranscriptionThread, EVT_RESULT, WEAK_WORD_THRESHOLD
 from core.cross_file_search import AUDIO_EXTENSIONS, parse_subtitles, find_audio_for
-from core.time_utils import format_range, format_srt_time
+from core.time_utils import format_range, format_srt_time, format_clock
 from core.logger import log_error
+from core import recovery
+import time
 from gui.settings_dialog import SettingsDialog
 from gui.download_dialog import DownloadDialog
 from gui.about_dialog import AboutDialog
@@ -20,6 +22,9 @@ from gui.audio_player import AudioPlayerPanel
 from gui.search_panel import CrossFileSearchPanel
 from gui.processing_dialog import ProcessingDialog
 from gui.edit_segment_dialog import EditSegmentDialog
+
+# كل كم ثانية يُحفظ التقدم على القرص أثناء التفريغ
+RECOVERY_SAVE_INTERVAL = 5
 
 EXPORT_FORMATS = ["srt", "txt", "vtt", "json", "docx"]
 EXPORT_WILDCARDS = {
@@ -506,6 +511,12 @@ class MainWindow(wx.Frame):
             wx.MessageBox(self.i18n.get("msg_audio_not_found"), self.i18n.get("dialog_error_title"), wx.ICON_ERROR)
             return
 
+        resume_segments = None
+        if not self.is_batch_mode:
+            proceed, resume_segments = self._ask_resume(self.audio_path)
+            if not proceed:
+                return
+
         self._set_controls_busy(True)
         self.result_list.SetFocus()
 
@@ -518,8 +529,6 @@ class MainWindow(wx.Frame):
             self.batch_failed = 0
             self.process_next_in_batch()
         else:
-            self.all_segments = []
-            self.result_list.DeleteAllItems()
             self.current_percent = 0
             self.on_stop_audio(None)
 
@@ -531,15 +540,80 @@ class MainWindow(wx.Frame):
 
             filename = os.path.basename(self.audio_path)
             self.processing_dialog.update_progress(0, 100, self.i18n.get("status_init_engine"), filename)
-            self.transcription_thread = TranscriptionThread(self, self.audio_path, self.i18n)
+            self._start_transcription(self.audio_path, resume_segments)
+
+    def _start_transcription(self, path, resume_segments=None):
+        self.all_segments = list(resume_segments or [])
+        self.txt_filter.ChangeValue("")
+        self.update_list()
+        self._last_recovery_save = time.time()
+        self._audio_duration = 0
+        self.transcription_thread = TranscriptionThread(self, path, self.i18n, resume_segments=resume_segments)
+
+    def _ask_resume(self, path):
+        """لو فيه تفريغ ناقص لهذا الملف: استكمال، أو بدء من جديد، أو تراجع. ترجع (نكمل؟، المقاطع السابقة)"""
+        if getattr(self, "_resume_confirmed", False):
+            self._resume_confirmed = False
+            saved = recovery.load(path)
+            return True, (saved["segments"] if saved else None)
+        saved = recovery.load(path)
+        if not saved:
+            return True, None
+        msg = self.i18n.get("msg_resume_found", file=os.path.basename(path),
+                            reached=format_clock(saved["last_end"]), total=format_clock(saved.get("duration") or 0),
+                            count=len(saved["segments"]))
+        dlg = wx.MessageDialog(self, msg, self.i18n.get("dialog_info_title"), wx.YES_NO | wx.CANCEL | wx.YES_DEFAULT | wx.ICON_QUESTION)
+        dlg.SetYesNoCancelLabels(self.i18n.get("btn_resume"), self.i18n.get("btn_restart"), self.i18n.get("btn_cancel"))
+        res = dlg.ShowModal()
+        dlg.Destroy()
+        if res == wx.ID_YES:
+            return True, saved["segments"]
+        if res == wx.ID_NO:
+            recovery.delete(path)
+            return True, None
+        return False, None
+
+    def _save_recovery(self, force=False):
+        """حفظ ما تم تفريغه حتى الآن، كل بضع ثوانٍ أو فوراً عند الإلغاء أو الخطأ"""
+        if not self.all_segments or not self.audio_path or not os.path.isfile(self.audio_path):
+            return
+        if force or time.time() - getattr(self, "_last_recovery_save", 0) >= RECOVERY_SAVE_INTERVAL:
+            recovery.save(self.audio_path, self.all_segments, getattr(self, "_audio_duration", 0))
+            self._last_recovery_save = time.time()
+
+    def check_pending_recovery(self):
+        """عند فتح البرنامج: لو فيه تفريغ لم يكتمل (إغلاق مفاجئ أو إلغاء) نعرض استكماله"""
+        pending = recovery.list_pending()
+        if not pending:
+            return
+        saved = pending[0]
+        msg = self.i18n.get("msg_pending_on_startup", file=os.path.basename(saved["audio_path"]),
+                            reached=format_clock(saved["last_end"]), total=format_clock(saved.get("duration") or 0))
+        dlg = wx.MessageDialog(self, msg, self.i18n.get("dialog_info_title"), wx.YES_NO | wx.YES_DEFAULT | wx.ICON_QUESTION)
+        dlg.SetYesNoLabels(self.i18n.get("btn_resume"), self.i18n.get("btn_later"))
+        res = dlg.ShowModal()
+        dlg.Destroy()
+        if res == wx.ID_YES:
+            self.set_single_file(saved["audio_path"])
+            self._resume_confirmed = True
+            self.on_process(None)
+
+    def append_segment(self, seg):
+        """إضافة جملة للقائمة فور تفريغها، دون تحريك التركيز"""
+        seg_index = len(self.all_segments)
+        self.all_segments.append(seg)
+        query = self.txt_filter.GetValue().strip().lower()
+        if not query or query in seg[1].lower():
+            row = self.result_list.InsertItem(self.result_list.GetItemCount(), "")
+            self.result_list.SetItemData(row, seg_index)
+            self._fill_row(row, seg_index)
+            self.displayed_indices.append(seg_index)
 
     def process_next_in_batch(self):
         if self.batch_current_idx < len(self.batch_queue):
             current_file = self.batch_queue[self.batch_current_idx]
             self.audio_path = current_file
             self.txt_file_path.SetValue(current_file)
-            self.all_segments = []
-            self.result_list.DeleteAllItems()
             self.current_percent = 0
             self.on_stop_audio(None)
 
@@ -555,7 +629,9 @@ class MainWindow(wx.Frame):
             if self.processing_dialog:
                 self.processing_dialog.update_progress(0, 100, self.i18n.get("status_init_engine"), filename)
 
-            self.transcription_thread = TranscriptionThread(self, current_file, self.i18n)
+            # في وضع المجلد يُستكمل أي ملف توقف سابقاً تلقائياً، بدون سؤال عن كل ملف
+            saved = recovery.load(current_file)
+            self._start_transcription(current_file, saved["segments"] if saved else None)
         else:
             total = len(self.batch_queue)
             succeeded = total - self.batch_failed
@@ -620,6 +696,11 @@ class MainWindow(wx.Frame):
             if self.processing_dialog:
                 self.processing_dialog.update_progress(0, 100, self.i18n.get("status_extracting"), filename)
 
+        elif status == "segment":
+            self._audio_duration = event.data.get("duration") or 0
+            self.append_segment(event.data["segment"])
+            self._save_recovery()
+
         elif status == "progress":
             self.current_percent = event.data
             if self.processing_dialog:
@@ -641,6 +722,8 @@ class MainWindow(wx.Frame):
         elif status == "done":
             self.current_percent = None
             self.transcription_thread = None
+            # اكتمل الملف: لا حاجة لملف الاسترجاع بعد الآن
+            recovery.delete(self.audio_path)
             self.all_segments = event.data["results"]
             self.txt_filter.ChangeValue("")
             self.update_list()
@@ -687,6 +770,8 @@ class MainWindow(wx.Frame):
         elif status == "error":
             self.current_percent = None
             self.transcription_thread = None
+            # ما تم تفريغه قبل الخطأ يُحفظ ليمكن الاستكمال لاحقاً
+            self._save_recovery(force=True)
 
             if self.is_batch_mode:
                 log_error(f"Batch item failed {filename}: {event.data}")
@@ -710,16 +795,23 @@ class MainWindow(wx.Frame):
         if self.transcription_thread:
             self.transcription_thread.abort()
         self.transcription_thread = None
-        if self.is_batch_mode:
-            self.audio_path = None
-            self.txt_file_path.SetValue("")
+        # حفظ ما تم تفريغه: يبقى ظاهراً وقابلاً للتصدير، ويمكن استكماله لاحقاً من نفس النقطة
+        self._save_recovery(force=True)
+        saved_partial = bool(self.all_segments)
+        # في وضع المجلد يبقى الملف الحالي محدداً، فيمكن استكماله بزر "بدء التفريغ"
         self.is_batch_mode = False
         self.batch_queue = []
         self.current_percent = None
         self.update_title_with_tab()
         self._close_processing_dialog()
         self._set_controls_busy(False)
-        self.status_bar.SetStatusText(self.i18n.get("status_canceled"))
+        if saved_partial:
+            msg = self.i18n.get("msg_canceled_saved", reached=format_clock(self.all_segments[-1][3]))
+            self.status_bar.SetStatusText(msg)
+            wx.MessageBox(msg, self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
+            self.result_list.SetFocus()
+        else:
+            self.status_bar.SetStatusText(self.i18n.get("status_canceled"))
 
     # ------------------------------------------------------------------ عرض النتائج
     @staticmethod

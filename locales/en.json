@@ -298,5 +298,11 @@
   "shortcut_edit_dialog": "In the edit window: F5 to listen, Ctrl+Enter to save, Esc to cancel.",
   "shortcut_processing": "In the processing window: Ctrl+I for progress, Esc to cancel. Progress is announced every 10%.",
   "shortcut_dict_delete": "In the custom dictionary: Enter to add, Delete to remove the selected word.",
-  "shortcut_escape": "Esc: close any dialog without saving."
+  "shortcut_escape": "Esc: close any dialog without saving.",
+  "msg_resume_found": "Part of «{file}» was already transcribed ({count} lines, up to {reached} of {total}).\nContinue from there?",
+  "msg_pending_on_startup": "Last time, transcribing «{file}» did not finish (reached {reached} of {total}).\nContinue now?",
+  "msg_canceled_saved": "Transcription canceled. The part done so far (up to {reached}) is saved and shown; press Start to continue from there.",
+  "btn_resume": "Continue",
+  "btn_restart": "Start over",
+  "btn_later": "Later"
 }

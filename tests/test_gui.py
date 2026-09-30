@@ -172,3 +172,36 @@ def test_progress_row_announces_every_ten_percent(main_window, i18n):
     # يتغير اسم السطر (فيُنطق) عند كل عشرة جديدة فقط
     assert len(dict.fromkeys(names)) == 3
     dlg.Destroy()
+
+
+def test_live_append_respects_filter(main_window):
+    main_window.all_segments = []
+    main_window.update_list()
+    main_window.append_segment(("", "بسم الله", 0.0, 1.0, []))
+    main_window.txt_filter.ChangeValue("الحمد")
+    main_window.append_segment(("", "الحمد لله", 1.0, 2.0, []))
+    main_window.append_segment(("", "رب العالمين", 2.0, 3.0, []))
+    assert len(main_window.all_segments) == 3
+    assert main_window.result_list.GetItemCount() == 2       # السطر الذي لا يطابق البحث لا يُعرض
+    assert main_window.result_list.GetItemData(1) == 1
+
+
+def test_cancel_saves_partial_and_resume_prompt(main_window, tmp_path, monkeypatch):
+    from core import recovery
+    audio = tmp_path / "long.mp3"
+    audio.write_bytes(b"x" * 10)
+    main_window.set_single_file(str(audio))
+    main_window.all_segments = list(SEGMENTS)
+    main_window._audio_duration = 3600
+    main_window.cancel_processing()
+    assert recovery.load(str(audio))["last_end"] == 6.0
+    assert main_window.all_segments and main_window.btn_process.IsEnabled()
+
+    # استكمال
+    monkeypatch.setattr(wx.MessageDialog, "ShowModal", lambda self: wx.ID_YES)
+    proceed, segs = main_window._ask_resume(str(audio))
+    assert proceed and len(segs) == 2
+    # البدء من جديد يحذف التقدم المحفوظ
+    monkeypatch.setattr(wx.MessageDialog, "ShowModal", lambda self: wx.ID_NO)
+    proceed, segs = main_window._ask_resume(str(audio))
+    assert proceed and segs is None and recovery.load(str(audio)) is None

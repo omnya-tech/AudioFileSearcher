@@ -298,5 +298,11 @@
   "shortcut_edit_dialog": "في نافذة تعديل النص: F5 لسماع المقطع، Ctrl+Enter للحفظ، Esc للإلغاء.",
   "shortcut_processing": "في نافذة المعالجة: Ctrl+I لسماع نسبة التقدم، Esc لإلغاء التفريغ. النسبة تُعلن تلقائياً كل 10%.",
   "shortcut_dict_delete": "في القاموس المخصص: Enter لإضافة الكلمة، Delete لحذف الكلمة المحددة.",
-  "shortcut_escape": "Esc: إغلاق أي نافذة فرعية دون حفظ."
+  "shortcut_escape": "Esc: إغلاق أي نافذة فرعية دون حفظ.",
+  "msg_resume_found": "الملف «{file}» تم تفريغ جزء منه قبل كده ({count} جملة، لحد {reached} من {total}).\nتحب تكمّل من النقطة دي؟",
+  "msg_pending_on_startup": "آخر مرة، تفريغ الملف «{file}» ما خلصش (وصل لـ {reached} من {total}).\nتحب تكمّله دلوقتي؟",
+  "msg_canceled_saved": "تم إلغاء التفريغ. الجزء اللي اتفرّغ (لحد {reached}) محفوظ وظاهر في النتائج، وتقدر تكمّل من عنده بزر «بدء التفريغ».",
+  "btn_resume": "استكمال",
+  "btn_restart": "البدء من جديد",
+  "btn_later": "لاحقاً"
 }

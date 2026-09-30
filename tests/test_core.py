@@ -151,3 +151,25 @@ def test_logger_survives_unwritable_dir(monkeypatch):
     monkeypatch.setattr(logger, "LOGS_DIR", r"Z:\definitely\not\here")
     lg = logger.Logger()   # لا يجب أن يرمي خطأ
     lg._write("ERROR", "test")
+
+
+def test_recovery_save_load_and_invalidate(tmp_path):
+    from core import recovery
+    audio = tmp_path / "talk.mp3"
+    audio.write_bytes(b"abc")
+    segs = [("00:00 - 00:02", "أ", 0.0, 2.0, []), ("00:02 - 00:05", "ب", 2.0, 5.0, [])]
+    assert recovery.save(str(audio), segs, 60.0)
+    data = recovery.load(str(audio))
+    assert data["last_end"] == 5.0 and data["segments"] == segs and data["duration"] == 60.0
+    assert [d["audio_path"] for d in recovery.list_pending()] == [str(audio)]
+
+    # لو تغيّر الملف الصوتي لا نستكمل تفريغاً لا يطابقه
+    audio.write_bytes(b"different content")
+    assert recovery.load(str(audio)) is None
+
+    audio.write_bytes(b"abc")
+    import os
+    os.utime(audio, (1, 1))
+    recovery.save(str(audio), segs, 60.0)
+    recovery.delete(str(audio))
+    assert recovery.load(str(audio)) is None and recovery.list_pending() == []

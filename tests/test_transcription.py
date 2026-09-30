@@ -66,3 +66,26 @@ def test_real_transcription_with_dictionary_cancel_and_rerun(main_window, settin
     main_window.on_process(None)
     wait_until_idle(main_window)
     assert main_window.all_segments and len(reports) == 2
+
+
+def test_resume_continues_after_saved_part(main_window, settings, speech_wav, tmp_path, monkeypatch):
+    """الاستكمال: المقاطع المحفوظة تبقى كما هي، والتفريغ يبدأ من نهاية آخر مقطع محفوظ"""
+    from core import recovery
+    from gui.report_dialog import ReportDialog
+    monkeypatch.setattr(ReportDialog, "ShowModal", lambda self: wx.ID_OK)
+    settings.update({"user_mode": "advanced", "transcription_language": "en", "model_size": MODEL,
+                     "use_local_model": True, "custom_dictionary": {}, "auto_save": False})
+
+    previous = [("00:00 - 00:02", "PREVIOUS PART", 0.0, 2.0, [])]
+    recovery.save(speech_wav, previous, 0)
+    main_window.set_single_file(speech_wav)
+    main_window._resume_confirmed = True
+    main_window.on_process(None)
+    wait_until_idle(main_window)
+
+    segs = main_window.all_segments
+    assert segs[0][1] == "PREVIOUS PART"
+    assert len(segs) > 1 and all(s[2] >= 2.0 - 0.5 for s in segs[1:])
+    assert "weather" in " ".join(s[1] for s in segs).lower()
+    # اكتمل الملف، فلا يبقى ملف استرجاع
+    assert recovery.load(speech_wav) is None

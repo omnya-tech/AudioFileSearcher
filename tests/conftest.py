@@ -19,6 +19,12 @@ def isolated_history(tmp_path, monkeypatch):
         self.history = []
 
     monkeypatch.setattr(tl.TranscriptionLogger, "__init__", init)
+    # ملفات استرجاع التفريغ كذلك في مجلد مؤقت
+    import core.recovery as rec
+    monkeypatch.setattr(rec, "RECOVERY_DIR", str(tmp_path / "recovery"))
+    # وسجل الأخطاء أيضاً، حتى لا تظهر أخطاء الاختبارات في سجل المستخدم الحقيقي
+    import core.logger as lg
+    monkeypatch.setattr(lg._logger_instance, "log_file", str(tmp_path / "app.log"))
 
 
 @pytest.fixture(scope="session")

@@ -23,6 +23,9 @@ class TranscriptionApp(wx.App):
         paths = [p for p in sys.argv[1:] if os.path.exists(p)]
         if paths:
             wx.CallAfter(self.main_window.on_files_dropped, paths)
+        else:
+            # تفريغ لم يكتمل في المرة السابقة (إغلاق مفاجئ أو انقطاع كهرباء): نعرض استكماله
+            wx.CallAfter(self.main_window.check_pending_recovery)
         return True
 
 if __name__ == '__main__':

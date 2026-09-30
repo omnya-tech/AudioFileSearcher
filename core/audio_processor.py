@@ -41,10 +41,13 @@ _CACHED_CONFIG = None
 _RUN_LOCK = threading.Lock()
 
 class TranscriptionThread(threading.Thread):
-    def __init__(self, parent, audio_file, i18n):
+    def __init__(self, parent, audio_file, i18n, resume_segments=None):
         super().__init__(daemon=True)
         self.parent = parent
         self.audio_file = audio_file
+        # مقاطع تم تفريغها في تشغيل سابق لم يكتمل: نبدأ من نهاية آخر مقطع بدلاً من أول الملف
+        self.resume_segments = list(resume_segments or [])
+        self.resume_from = float(self.resume_segments[-1][3]) if self.resume_segments else 0.0
         self.i18n = i18n
         self.settings = parent.settings
         self.corrections_dict = dict(self.settings.get("custom_dictionary", {}) or {})
@@ -204,11 +207,14 @@ class TranscriptionThread(threading.Thread):
             "compression_ratio_threshold": 2.4
         }
         if not opts["auto_detect_lang"]: transcribe_params["language"] = opts["transcription_lang"]
+        if self.resume_from > 0:
+            # التوقيتات الناتجة تبقى محسوبة من أول الملف، فتُضاف للمقاطع السابقة مباشرة
+            transcribe_params["clip_timestamps"] = [self.resume_from]
 
         segments, info = model.transcribe(**transcribe_params)
 
         total_duration = info.duration
-        results = []
+        results = list(self.resume_segments)
         total_segments, flagged_segments, total_confidence = 0, 0, 0.0
         segment_details = []
         last_percent = -1
@@ -255,7 +261,10 @@ class TranscriptionThread(threading.Thread):
             if opts["word_timestamps"] and getattr(segment, 'words', None):
                 words_data = [{"word": w.word, "start": float(w.start), "end": float(w.end), "probability": round(float(w.probability), 3)} for w in segment.words]
 
-            results.append((format_range(segment.start, segment.end), corrected_text, segment.start, segment.end, words_data))
+            seg_tuple = (format_range(segment.start, segment.end), corrected_text, float(segment.start), float(segment.end), words_data)
+            results.append(seg_tuple)
+            # كل جملة تُرسل فور جاهزيتها: تظهر في القائمة وتُحفظ للاسترجاع بدون انتظار نهاية الملف
+            self._post("segment", {"segment": seg_tuple, "duration": total_duration})
 
         self._check_abort()
 
