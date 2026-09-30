@@ -1,7 +1,16 @@
+import os
+import wave
+import shutil
+import hashlib
+import tempfile
+import numpy as np
 import wx
 import pygame
 from core.i18n import LocalizationManager
 from core.logger import log_error
+
+# جودة كافية للاستماع للكلام، مع حجم معقول للنسخة المؤقتة
+PLAYBACK_RATE = 22050
 
 class AudioPlayerPanel(wx.Panel):
     def __init__(self, parent, i18n: LocalizationManager):
@@ -41,7 +50,11 @@ class AudioPlayerPanel(wx.Panel):
                 log_error(f"Audio device init failed: {e}")
                 return False, str(e)
         try:
-            pygame.mixer.music.load(path)
+            try:
+                pygame.mixer.music.load(path)
+            except pygame.error:
+                # صيغ مثل m4a و aac لا يشغلها pygame، فنحولها لنسخة wav مؤقتة ونشغلها
+                pygame.mixer.music.load(self._playable_copy(path))
             try:
                 pygame.mixer.music.play(start=start_time)
             except pygame.error:
@@ -58,6 +71,35 @@ class AudioPlayerPanel(wx.Panel):
             self.is_playing = False
             self._update_play_label()
             return False, str(e)
+
+    def _playable_copy(self, path):
+        """تحويل الملف لـ wav مؤقت (مرة واحدة لكل ملف، ويُعاد استخدامه طالما الملف الأصلي لم يتغير)"""
+        key = hashlib.md5(f"{os.path.abspath(path)}|{os.path.getmtime(path)}".encode("utf-8")).hexdigest()
+        target = os.path.join(self._cache_dir(), f"{key}.wav")
+        if os.path.isfile(target):
+            return target
+
+        from faster_whisper.audio import decode_audio
+        busy = wx.BusyInfo(self.i18n.get("status_preparing_audio"))
+        try:
+            samples = decode_audio(path, sampling_rate=PLAYBACK_RATE)
+            pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype(np.int16)
+            tmp = target + ".part"
+            with wave.open(tmp, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(PLAYBACK_RATE)
+                w.writeframes(pcm.tobytes())
+            os.replace(tmp, target)
+        finally:
+            del busy
+        return target
+
+    @staticmethod
+    def _cache_dir():
+        d = os.path.join(tempfile.gettempdir(), "audio_transcriber_playback")
+        os.makedirs(d, exist_ok=True)
+        return d
 
     def on_play(self, event):
         if not self.current_audio or not pygame.mixer.get_init(): return
@@ -80,3 +122,9 @@ class AudioPlayerPanel(wx.Panel):
 
     def cleanup(self):
         self.on_stop(None)
+        try:
+            pygame.mixer.music.unload()
+        except Exception:
+            pass
+        # حذف النسخ المؤقتة التي أنشأها البرنامج للتشغيل
+        shutil.rmtree(os.path.join(tempfile.gettempdir(), "audio_transcriber_playback"), ignore_errors=True)

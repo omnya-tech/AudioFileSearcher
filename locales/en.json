@@ -310,7 +310,7 @@
   "msg_model_not_installed": "Model ({model}) is not installed and \"Use local model\" is enabled.\nDownload it from Tools > Model Manager, or turn the option off in Settings.",
   "msg_no_active_process": "No transcription is running.",
   "msg_output_dir_invalid": "The selected output folder does not exist.",
-  "msg_playback_failed": "Could not play the audio. The format may not be supported for playback (e.g. m4a).\n\n{error}",
+  "msg_playback_failed": "Could not play the audio file.\n\n{error}",
   "msg_ram_scan_result": "Memory (RAM): {ram} GB\nSuggested model: {model}",
   "msg_srt_empty": "The file has no valid subtitle entries.",
   "msg_use_downloaded_model": "Use this model for transcription from now on?",
@@ -329,5 +329,12 @@
   "word_from": "of",
   "btn_search": "Search",
   "report_weak_words": "uncertain words: {words}",
-  "tip_vad_filter": "Skips silence to speed up long files, but may cut off long drawn-out endings in recitation or singing; turn it off for those."
+  "tip_vad_filter": "Skips silence to speed up long files, but may cut off long drawn-out endings in recitation or singing; turn it off for those.",
+  "menu_play_segment": "Play segment",
+  "menu_edit_segment": "Edit text",
+  "dialog_edit_segment_title": "Edit segment text",
+  "status_segment_edited": "Segment edited. Remember to save the results (Ctrl+S).",
+  "msg_unsaved_edits": "You have unsaved edits. Save them before continuing?",
+  "btn_discard": "Discard",
+  "status_preparing_audio": "Preparing audio for playback..."
 }

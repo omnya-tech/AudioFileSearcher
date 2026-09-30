@@ -1,5 +1,6 @@
 import os
 import json
+from core.paths import LOCALES_DIR
 
 class LocalizationManager:
     def __init__(self, default_lang="ar"):
@@ -8,8 +9,7 @@ class LocalizationManager:
         self._observers = []
 
         # تحديد مسار مجلد locales بدقة بناءً على مكان ملف i18n.py داخل مجلد core
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.locales_dir = os.path.join(self.base_dir, "locales")
+        self.locales_dir = LOCALES_DIR
         
         self.load_translations()
 

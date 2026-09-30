@@ -6,7 +6,7 @@ import subprocess
 import platform
 from core.i18n import LocalizationManager
 from core.settings import SettingsManager
-from core.audio_processor import TranscriptionThread, EVT_RESULT
+from core.audio_processor import TranscriptionThread, EVT_RESULT, WEAK_WORD_THRESHOLD
 from core.cross_file_search import AUDIO_EXTENSIONS, parse_subtitles, find_audio_for
 from core.time_utils import format_range, format_srt_time
 from core.logger import log_error
@@ -19,6 +19,7 @@ from gui.custom_dict_dialog import CustomDictDialog
 from gui.audio_player import AudioPlayerPanel
 from gui.search_panel import CrossFileSearchPanel
 from gui.processing_dialog import ProcessingDialog
+from gui.edit_segment_dialog import EditSegmentDialog
 
 EXPORT_FORMATS = ["srt", "txt", "vtt", "json", "docx"]
 EXPORT_WILDCARDS = {
@@ -52,7 +53,8 @@ class MainWindow(wx.Frame):
         self.settings = settings
         self.audio_path = None
         self.all_segments = []
-        self.current_displayed_segments = []
+        self.displayed_indices = []
+        self.unsaved_edits = False
         self.current_percent = None
         self.is_batch_mode = False
         self.batch_queue = []
@@ -259,6 +261,8 @@ class MainWindow(wx.Frame):
         self.btn_export.Bind(wx.EVT_BUTTON, self.on_export_srt)
         self.txt_filter.Bind(wx.EVT_TEXT, self.on_filter_results)
         self.result_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_play_segment)
+        self.result_list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
+        self.result_list.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
         self.Bind(wx.EVT_CLOSE, self.on_exit)
 
         self.setup_button_hover_effects()
@@ -402,6 +406,8 @@ class MainWindow(wx.Frame):
         dlg.Destroy()
 
     def load_srt_file(self, srt_path):
+        if not self.confirm_discard_edits():
+            return
         try:
             parsed = parse_subtitles(srt_path)
         except Exception as e:
@@ -414,7 +420,7 @@ class MainWindow(wx.Frame):
 
         self.all_segments = [(format_range(s, e), text, s, e, []) for s, e, text in parsed]
         self.txt_filter.ChangeValue("")
-        self.update_list(self.all_segments)
+        self.update_list()
         self.txt_file_path.SetValue(srt_path)
         self.btn_export.Enable()
         self.mi_export.Enable(True)
@@ -460,6 +466,7 @@ class MainWindow(wx.Frame):
     def on_process(self, event):
         if not self.audio_path and not self.batch_queue: return
         if self.transcription_thread_running(): return
+        if not self.confirm_discard_edits(): return
         if not self.is_batch_mode and not os.path.isfile(self.audio_path or ""):
             wx.MessageBox(self.i18n.get("msg_audio_not_found"), self.i18n.get("dialog_error_title"), wx.ICON_ERROR)
             return
@@ -601,7 +608,7 @@ class MainWindow(wx.Frame):
             self.transcription_thread = None
             self.all_segments = event.data["results"]
             self.txt_filter.ChangeValue("")
-            self.update_list(self.all_segments)
+            self.update_list()
 
             status_template = self.i18n.get("status_done")
             status_txt = status_template.format(time=event.data["time"]) if "{time}" in status_template else "Done"
@@ -674,25 +681,108 @@ class MainWindow(wx.Frame):
         self.status_bar.SetStatusText(self.i18n.get("status_canceled"))
 
     # ------------------------------------------------------------------ عرض النتائج
-    def update_list(self, items):
+    @staticmethod
+    def _is_weak(seg):
+        """المقطع فيه كلمة واحدة على الأقل النموذج غير متأكد منها"""
+        words = seg[4] if len(seg) > 4 and seg[4] else []
+        return any(w.get("probability", 1.0) < WEAK_WORD_THRESHOLD for w in words)
+
+    def _fill_row(self, row, seg_index):
+        seg = self.all_segments[seg_index]
+        self.result_list.SetItem(row, 1, seg[1].replace("\n", " "))
+        colour = wx.Colour(200, 40, 40) if self._is_weak(seg) else self.result_list.GetForegroundColour()
+        self.result_list.SetItemTextColour(row, colour)
+
+    def update_list(self, indices=None):
+        """عرض المقاطع. indices أرقام المقاطع داخل all_segments (الكل لو None)"""
+        if indices is None:
+            indices = list(range(len(self.all_segments)))
         self.result_list.Freeze()
         try:
             self.result_list.DeleteAllItems()
-            self.current_displayed_segments = items
-            for i, item in enumerate(items):
-                index = self.result_list.InsertItem(self.result_list.GetItemCount(), format_range(item[2], item[3]))
-                self.result_list.SetItem(index, 1, item[1].replace("\n", " "))
-                self.result_list.SetItemData(index, i)
+            self.displayed_indices = indices
+            for seg_index in indices:
+                seg = self.all_segments[seg_index]
+                row = self.result_list.InsertItem(self.result_list.GetItemCount(), format_range(seg[2], seg[3]))
+                # كل سطر يحمل رقم المقطع الأصلي، فالتشغيل والتعديل يعملان حتى أثناء البحث
+                self.result_list.SetItemData(row, seg_index)
+                self._fill_row(row, seg_index)
         finally:
             self.result_list.Thaw()
 
     def on_filter_results(self, event):
         query = self.txt_filter.GetValue().strip().lower()
         if not query:
-            self.update_list(self.all_segments)
+            self.update_list()
             return
-        filtered = [seg for seg in self.all_segments if query in seg[1].lower()]
-        self.update_list(filtered)
+        self.update_list([i for i, seg in enumerate(self.all_segments) if query in seg[1].lower()])
+
+    def _selected_segment_index(self):
+        row = self.result_list.GetFirstSelected()
+        if row == -1:
+            return None, None
+        seg_index = self.result_list.GetItemData(row)
+        return (row, seg_index) if 0 <= seg_index < len(self.all_segments) else (None, None)
+
+    def _can_play(self):
+        return not self.is_batch_mode and self.audio_path and os.path.isfile(self.audio_path)
+
+    # ------------------------------------------------------------------ تعديل النص
+    def on_list_key(self, event):
+        if event.GetKeyCode() == wx.WXK_F2:
+            self.on_edit_segment(None)
+        else:
+            event.Skip()
+
+    def on_list_context_menu(self, event):
+        row, seg_index = self._selected_segment_index()
+        if seg_index is None:
+            return
+        menu = wx.Menu()
+        mi_play = menu.Append(wx.ID_ANY, self.i18n.get("menu_play_segment"))
+        mi_edit = menu.Append(wx.ID_ANY, self.i18n.get("menu_edit_segment") + "\tF2")
+        mi_play.Enable(bool(self._can_play()))
+        self.Bind(wx.EVT_MENU, lambda e: self._play(self.audio_path, self.all_segments[seg_index][2]), mi_play)
+        self.Bind(wx.EVT_MENU, self.on_edit_segment, mi_edit)
+        self.result_list.PopupMenu(menu)
+        menu.Destroy()
+
+    def on_edit_segment(self, event):
+        if self.transcription_thread_running():
+            return
+        row, seg_index = self._selected_segment_index()
+        if seg_index is None:
+            return
+        seg = self.all_segments[seg_index]
+        play = (lambda: self._play(self.audio_path, seg[2])) if self._can_play() else None
+        dlg = EditSegmentDialog(self, self.i18n, format_range(seg[2], seg[3]), seg[1], play)
+        if dlg.ShowModal() == wx.ID_OK:
+            new_text = dlg.get_text()
+            if new_text and new_text != seg[1]:
+                # توقيتات الكلمات القديمة لم تعد تطابق النص، والمراجعة البشرية تلغي علامة الشك
+                self.all_segments[seg_index] = (seg[0], new_text, seg[2], seg[3], [])
+                self._fill_row(row, seg_index)
+                self.unsaved_edits = True
+                self.status_bar.SetStatusText(self.i18n.get("status_segment_edited"))
+        dlg.Destroy()
+        self.result_list.SetFocus()
+
+    def confirm_discard_edits(self):
+        """يُستدعى قبل أي عملية تستبدل النتائج الحالية. يرجع False لو المستخدم تراجع"""
+        if not getattr(self, 'unsaved_edits', False):
+            return True
+        dlg = wx.MessageDialog(self, self.i18n.get("msg_unsaved_edits"), self.i18n.get("dialog_warning_title"),
+                               wx.YES_NO | wx.CANCEL | wx.YES_DEFAULT | wx.ICON_QUESTION)
+        dlg.SetYesNoCancelLabels(self.i18n.get("btn_save"), self.i18n.get("btn_discard"), self.i18n.get("btn_cancel"))
+        res = dlg.ShowModal()
+        dlg.Destroy()
+        if res == wx.ID_YES:
+            self.on_export_srt(None)
+            return not self.unsaved_edits
+        if res == wx.ID_NO:
+            self.unsaved_edits = False
+            return True
+        return False
 
     # ------------------------------------------------------------------ التشغيل
     def _play(self, audio_path, start_time):
@@ -709,10 +799,10 @@ class MainWindow(wx.Frame):
             wx.MessageBox(self.i18n.get("msg_playback_failed", error=error), self.i18n.get("dialog_error_title"), wx.ICON_WARNING)
 
     def on_play_segment(self, event):
-        if self.is_batch_mode or not self.audio_path or os.path.isdir(self.audio_path): return
-        data_index = self.result_list.GetItemData(event.GetIndex())
-        if 0 <= data_index < len(self.current_displayed_segments):
-            self._play(self.audio_path, self.current_displayed_segments[data_index][2])
+        if not self._can_play(): return
+        seg_index = self.result_list.GetItemData(event.GetIndex())
+        if 0 <= seg_index < len(self.all_segments):
+            self._play(self.audio_path, self.all_segments[seg_index][2])
 
     def on_stop_audio(self, event):
         self.audio_player.on_stop(None)
@@ -761,6 +851,7 @@ class MainWindow(wx.Frame):
             log_error(f"Export to {path} failed: {e}")
             self.show_error(e)
             return False
+        self.unsaved_edits = False
         if show_msg:
             wx.MessageBox(self.i18n.get("msg_export_success"), self.i18n.get("dialog_success_title"), wx.ICON_INFORMATION)
         return True
@@ -818,6 +909,9 @@ class MainWindow(wx.Frame):
 
     # ------------------------------------------------------------------ الإغلاق
     def on_exit(self, event):
+        if not self.confirm_discard_edits():
+            if isinstance(event, wx.CloseEvent) and event.CanVeto(): event.Veto()
+            return
         if getattr(self, 'download_dialog', None) and self.download_dialog.is_downloading:
             dlg = wx.MessageDialog(self, self.i18n.get("dl_msg_confirm_hide"), self.i18n.get("dialog_warning_title"), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
             res = dlg.ShowModal()
@@ -878,7 +972,7 @@ class MainWindow(wx.Frame):
 
         self.result_list.ClearAll()
         self._insert_result_columns()
-        self.update_list(self.current_displayed_segments)
+        self.update_list(self.displayed_indices)
 
         self.search_panel.refresh_ui_texts()
         self.audio_player.refresh_ui_texts()

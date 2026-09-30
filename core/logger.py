@@ -1,10 +1,10 @@
 import os
 from datetime import datetime
+from core.paths import LOGS_DIR
 
 class Logger:
     def __init__(self):
-        self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.log_dir = os.path.join(self.base_dir, "logs")
+        self.log_dir = LOGS_DIR
         self.log_file = os.path.join(self.log_dir, "app.log")
         
         if not os.path.exists(self.log_dir):

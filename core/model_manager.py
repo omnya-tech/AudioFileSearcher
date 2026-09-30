@@ -1,10 +1,10 @@
 import os
+from core.paths import MODELS_DIR
 
 class ModelManager:
     @staticmethod
     def get_models_dir():
-        base_dir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-        models_dir = os.path.join(base_dir, "models")
+        models_dir = MODELS_DIR
         if not os.path.exists(models_dir):
             try:
                 os.makedirs(models_dir)

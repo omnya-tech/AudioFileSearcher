@@ -1,12 +1,12 @@
 import os
 import json
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from core.paths import APP_DIR as BASE_DIR, CONFIG_FILE
 
 class SettingsManager:
     def __init__(self, config_file=None):
         # المسار ثابت بجانب البرنامج مهما كان مجلد التشغيل الحالي
-        self.config_file = config_file or os.path.join(BASE_DIR, "config.json")
+        self.config_file = config_file or CONFIG_FILE
         self.settings = self._get_defaults()
         self.load()
 
