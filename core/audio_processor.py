@@ -5,6 +5,7 @@ import os
 import gc
 import math
 import psutil
+from types import SimpleNamespace
 from faster_whisper import WhisperModel
 from core.text_corrector import TextCorrector
 from core.transcription_logger import TranscriptionLogger, ErrorDetector
@@ -34,6 +35,36 @@ class ModelNotInstalledError(Exception):
 
 # أي كلمة احتمالها أقل من هذا تُعتبر مشكوكاً فيها وتحتاج مراجعة
 WEAK_WORD_THRESHOLD = 0.75
+
+# إعدادات فلتر الصمت بعد تجربتها على محاضرة فيها صمت وموسيقى وضوضاء، وعلى تلاوة بمدود طويلة:
+# الإعدادات الافتراضية (0.5 / 400ms) كانت تقطع نهاية التلاوة، وبدون فلتر ألّف النموذج كلاماً في الضوضاء.
+VAD_PARAMETERS = {"threshold": 0.2, "speech_pad_ms": 3000}
+# المقطع الذي فيه فجوة أطول من هذا بين كلمتين يُقسم لمقطعين (الفلتر قد يدمج جملتين يفصلهما صمت أو موسيقى)
+SPLIT_GAP_SECONDS = 2.0
+# عند الاستكمال لا يعمل فلتر الصمت (مع clip_timestamps)، فنستخدم حماية النموذج من تأليف كلام في الصمت
+HALLUCINATION_SILENCE_THRESHOLD = 2.0
+
+
+def split_on_gaps(segments, gap=SPLIT_GAP_SECONDS):
+    """تقسيم أي مقطع عند الفجوات الطويلة بين كلماته، مع الحفاظ على توقيت كل جزء بدقة"""
+    for seg in segments:
+        words = list(getattr(seg, "words", None) or [])
+        if len(words) < 2:
+            yield seg
+            continue
+        groups, current = [], [words[0]]
+        for prev, word in zip(words, words[1:]):
+            if word.start - prev.end > gap:
+                groups.append(current)
+                current = []
+            current.append(word)
+        groups.append(current)
+        if len(groups) == 1:
+            yield seg
+            continue
+        for group in groups:
+            yield SimpleNamespace(start=group[0].start, end=group[-1].end, words=group,
+                                  text="".join(w.word for w in group).strip(), avg_logprob=seg.avg_logprob)
 
 _CACHED_MODEL = None
 _CACHED_CONFIG = None
@@ -97,7 +128,7 @@ class TranscriptionThread(threading.Thread):
                 "compute_type": "int8", "beam_size": 2, "temperature": 0.0,
                 "transcription_lang": transcription_lang, "auto_detect_lang": auto_detect_lang,
                 # فلتر الصمت يتبع اختيار المستخدم: قد يقطع نهايات المدود الطويلة في التلاوة
-                "vad_filter": s.get("vad_filter", False), "word_timestamps": True, "prompt": None,
+                "vad_filter": s.get("vad_filter", True), "word_timestamps": True, "prompt": None,
                 "no_speech_threshold": 0.6, "threads_count": 2,
             }
 
@@ -108,7 +139,7 @@ class TranscriptionThread(threading.Thread):
             "temperature": float(s.get("temperature", 0.0)),
             "transcription_lang": transcription_lang,
             "auto_detect_lang": auto_detect_lang,
-            "vad_filter": s.get("vad_filter", False),
+            "vad_filter": s.get("vad_filter", True),
             "word_timestamps": s.get("word_timestamps", True),
             "prompt": custom_prompt if custom_prompt.strip() else None,
             "no_speech_threshold": float(s.get("no_speech_threshold", 0.6)),
@@ -201,6 +232,7 @@ class TranscriptionThread(threading.Thread):
             "initial_prompt": opts["prompt"],
             "hotwords": dynamic_hotwords,
             "vad_filter": opts["vad_filter"],
+            "vad_parameters": VAD_PARAMETERS,
             "word_timestamps": opts["word_timestamps"],
             "condition_on_previous_text": False,
             "no_speech_threshold": opts["no_speech_threshold"],
@@ -210,6 +242,8 @@ class TranscriptionThread(threading.Thread):
         if self.resume_from > 0:
             # التوقيتات الناتجة تبقى محسوبة من أول الملف، فتُضاف للمقاطع السابقة مباشرة
             transcribe_params["clip_timestamps"] = [self.resume_from]
+            if opts["word_timestamps"]:
+                transcribe_params["hallucination_silence_threshold"] = HALLUCINATION_SILENCE_THRESHOLD
 
         segments, info = model.transcribe(**transcribe_params)
 
@@ -219,7 +253,7 @@ class TranscriptionThread(threading.Thread):
         segment_details = []
         last_percent = -1
 
-        for segment in segments:
+        for segment in split_on_gaps(segments):
             self._check_abort()
             if total_duration > 0:
                 percent = min(int((segment.end / total_duration) * 100), 100)

@@ -183,3 +183,15 @@ def test_single_instance_messages(tmp_path, monkeypatch):
     reqs = si.take_requests()
     assert reqs == [[str(tmp_path / "a.mp3")], []]
     assert si.take_requests() == []                  # كل طلب يُقرأ مرة واحدة فقط
+
+
+def test_split_on_gaps():
+    from types import SimpleNamespace as N
+    from core.audio_processor import split_on_gaps
+    w = lambda t, a, b: N(word=t, start=a, end=b, probability=0.9)
+    merged = N(start=55.6, end=87.6, avg_logprob=-0.1, text="x",
+               words=[w(" last", 55.6, 56.0), w(" decade.", 56.0, 56.3), w(" Finally,", 82.0, 82.6), w(" wind", 82.6, 83.0)])
+    normal = N(start=0, end=2, avg_logprob=-0.1, text="hi there", words=[w(" hi", 0, 0.5), w(" there", 0.6, 1.0)])
+    parts = list(split_on_gaps([merged, normal]))
+    assert [(p.start, p.end, p.text) for p in parts[:2]] == [(55.6, 56.3, "last decade."), (82.0, 83.0, "Finally, wind")]
+    assert parts[2] is normal

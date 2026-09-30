@@ -377,7 +377,7 @@ class SettingsDialog(wx.Dialog):
         self.spin_temp.SetValue(float(s.get("temperature", 0.0)))
         self.spin_threads.SetValue(int(s.get("threads", 0)))
         self.spin_no_speech.SetValue(float(s.get("no_speech_threshold", 0.6)))
-        self.chk_vad.SetValue(s.get("vad_filter", False))
+        self.chk_vad.SetValue(s.get("vad_filter", True))
         self.chk_word_ts.SetValue(s.get("word_timestamps", True))
         self.txt_prompt.SetValue(s.get("initial_prompt", "") or "")
 

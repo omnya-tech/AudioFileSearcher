@@ -35,7 +35,7 @@ class SettingsManager:
             "temperature": 0.0,
             "transcription_language": "ar",
             "auto_detect_language": False,
-            "vad_filter": False,
+            "vad_filter": True,
             "word_timestamps": True,
             "no_speech_threshold": 0.6,
             "threads": 0,
