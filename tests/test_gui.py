@@ -104,6 +104,18 @@ def test_export_then_reload_srt(main_window, tmp_path):
     assert main_window.all_segments[1][2] == 2.5
 
 
+@pytest.mark.parametrize("model_id, tags, expected", [
+    ("guillaumekln/faster-whisper-large-v2", ["ar", "en", "fr", "de", "es"], False),  # متعدد اللغات
+    ("OdyAsh/faster-whisper-base-ar-quran", [], True),
+    ("x/faster-whisper-small-egyptian-arabic", [], True),
+    ("x/faster-whisper-large-v3-turbo", [], False),
+    ("x/some-model", ["ar"], True),
+])
+def test_arabic_model_filter(model_id, tags, expected):
+    from gui.download_dialog import HFSearchThread
+    assert HFSearchThread.is_arabic_model(model_id.lower(), tags) is expected
+
+
 def test_playable_copy_converts_audio(main_window, tmp_path):
     src = tmp_path / "tone.wav"
     tone = (np.sin(np.linspace(0, 440 * 2 * np.pi, 16000)) * 12000).astype(np.int16)

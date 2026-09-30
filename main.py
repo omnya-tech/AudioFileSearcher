@@ -1,5 +1,6 @@
 import wx
 import os
+import sys
 from core.paths import APP_DIR
 from core.i18n import LocalizationManager
 from core.settings import SettingsManager
@@ -13,6 +14,11 @@ class TranscriptionApp(wx.App):
 
         self.main_window = MainWindow(self.i18n, self.settings, None)
         self.main_window.Show()
+
+        # فتح ملف من سطر الأوامر أو من "فتح باستخدام" في ويندوز: يبدأ التفريغ مباشرة
+        paths = [p for p in sys.argv[1:] if os.path.exists(p)]
+        if paths:
+            wx.CallAfter(self.main_window.on_files_dropped, paths)
         return True
 
 if __name__ == '__main__':

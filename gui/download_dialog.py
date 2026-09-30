@@ -1,5 +1,6 @@
 import wx
 import os
+import re
 import shutil
 import threading
 from huggingface_hub import HfApi
@@ -36,6 +37,21 @@ class HFSearchThread(threading.Thread):
         self.category_idx = category_idx
         self.start()
 
+    ARABIC_NAME_HINTS = ("arabic", "quran", "egypt", "saudi", "tarteel")
+
+    @staticmethod
+    def is_arabic_model(model_id_lower, tags):
+        """
+        النماذج متعددة اللغات تحمل وسم "ar" ضمن ~100 لغة، فالوسم وحده لا يعني أنها عربية.
+        نعتبر النموذج عربياً لو اسمه يدل على ذلك، أو لو العربية من لغاته القليلة (3 لغات أو أقل).
+        """
+        name = model_id_lower.split("/")[-1]
+        name_parts = re.split(r"[-_.]", name)
+        if "ar" in name_parts or any(h in name for h in HFSearchThread.ARABIC_NAME_HINTS):
+            return True
+        lang_tags = [t for t in tags if len(t) == 2 and t.isalpha()]
+        return "ar" in lang_tags and len(lang_tags) <= 3
+
     def run(self):
         try:
             api = HfApi()
@@ -53,16 +69,17 @@ class HFSearchThread(threading.Thread):
                 for mid in official_ids:
                     results.append({"id": mid})
             else:
-                models = api.list_models(search="faster-whisper", sort="downloads", direction=-1, limit=300)
+                # الترتيب حسب التحميلات تنازلي افتراضياً (الإصدارات الحديثة ألغت خيار direction)
+                models = api.list_models(search="faster-whisper", sort="downloads", limit=300)
                 for model in models:
                     model_id = getattr(model, 'id', getattr(model, 'modelId', ''))
                     if not model_id: continue
                     model_id_lower = model_id.lower()
-                    tags = [t.lower() for t in getattr(model, 'tags', [])]
+                    tags = [t.lower() for t in (getattr(model, 'tags', None) or [])]
                     
                     if "systran/" in model_id_lower or "deepdml/" in model_id_lower: continue
                         
-                    is_arabic = ("ar" in tags or "arabic" in tags or "-ar" in model_id_lower or "arabic" in model_id_lower)
+                    is_arabic = self.is_arabic_model(model_id_lower, tags)
                     
                     if self.category_idx == 1 and not is_arabic: continue
                     if self.category_idx == 2 and is_arabic: continue 
@@ -95,10 +112,11 @@ class HFModelDetailsThread(threading.Thread):
             
             data = {
                 "id": repo_id,
-                "author": getattr(info, 'author', 'Unknown'),
-                "last_modified": getattr(info, 'lastModified', 'Unknown'),
-                "downloads": getattr(info, 'downloads', 0),
-                "likes": getattr(info, 'likes', 0),
+                "author": getattr(info, 'author', None) or repo_id.split("/")[0],
+                # الاسم تغيّر بين إصدارات المكتبة
+                "last_modified": getattr(info, 'last_modified', None) or getattr(info, 'lastModified', None) or "",
+                "downloads": getattr(info, 'downloads', 0) or 0,
+                "likes": getattr(info, 'likes', 0) or 0,
                 "size_bytes": exact_size
             }
             wx.PostEvent(self.parent, HFDetailsResultEvent(data))
@@ -346,7 +364,7 @@ class DownloadDialog(wx.Frame):
         self._add_info_item(self.i18n.get("dl_prop_size"), self.format_size(self.current_expected_size))
         self._add_info_item(self.i18n.get("dl_prop_downloads"), f"{data.get('downloads'):,}")
         self._add_info_item(self.i18n.get("dl_prop_likes"), f"{data.get('likes'):,}")
-        self._add_info_item(self.i18n.get("dl_prop_updated", default="آخر تحديث:"), str(data.get("last_modified")).split('T')[0])
+        self._add_info_item(self.i18n.get("dl_prop_updated", default="آخر تحديث:"), str(data.get("last_modified") or self.i18n.get("dl_val_unknown"))[:10])
         self._add_info_item(self.i18n.get("dl_prop_url", default="الرابط:"), f"https://huggingface.co/{data.get('id')}")
 
     def refresh_installed_models(self):
