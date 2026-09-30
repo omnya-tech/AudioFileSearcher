@@ -21,7 +21,7 @@ class CrossFileSearchPanel(wx.Panel):
         self.searcher = CrossFileSearcher()
         self.search_dir = ""
         self.results = []
-        # ط±ظ‚ظ… ط¢ط®ط± ط¹ظ…ظ„ظٹط© ط¨ط­ط«: ط£ظٹ ظ†طھظٹط¬ط© ظ…ظ† ط¨ط­ط« ط£ظ‚ط¯ظ… ظٹطھظ… طھط¬ط§ظ‡ظ„ظ‡ط§
+        # رقم آخر عملية بحث: أي نتيجة من بحث أقدم يتم تجاهلها
         self._search_token = 0
         self.setup_ui()
         self.Connect(-1, -1, EVT_SEARCH_DONE_ID, self.on_search_done)
@@ -29,24 +29,32 @@ class CrossFileSearchPanel(wx.Panel):
     def setup_ui(self):
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        top_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        # كل عنوان يُنشأ قبل حقله مباشرة ليقرأه قارئ الشاشة كاسم للحقل، وترتيب الإنشاء = ترتيب التنقل بـ Tab
+        folder_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_folder = wx.Button(self, label=self.i18n.get("btn_select_search_folder"))
+        self.lbl_folder = wx.StaticText(self, label=self.i18n.get("lbl_search_folder"))
+        self.txt_folder = wx.TextCtrl(self, style=wx.TE_READONLY)
+        self.txt_folder.SetValue(self.i18n.get("hint_no_folder_selected"))
+        folder_sizer.Add(self.btn_folder, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        folder_sizer.Add(self.lbl_folder, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        folder_sizer.Add(self.txt_folder, 1, wx.ALL | wx.EXPAND, 5)
+        sizer.Add(folder_sizer, 0, wx.EXPAND | wx.ALL, 5)
+
+        query_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.lbl_query = wx.StaticText(self, label=self.i18n.get("lbl_search_word"))
         self.txt_query = wx.TextCtrl(self, style=wx.TE_PROCESS_ENTER)
         self.txt_query.SetHint(self.i18n.get("hint_search_global"))
         self.btn_search = wx.Button(self, label=self.i18n.get("btn_search"))
+        query_sizer.Add(self.lbl_query, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        query_sizer.Add(self.txt_query, 1, wx.ALL | wx.EXPAND, 5)
+        query_sizer.Add(self.btn_search, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        sizer.Add(query_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
-        top_sizer.Add(self.btn_folder, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
-        top_sizer.Add(self.txt_query, 1, wx.ALL | wx.EXPAND, 5)
-        top_sizer.Add(self.btn_search, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
-
-        sizer.Add(top_sizer, 0, wx.EXPAND | wx.ALL, 5)
-
-        self.txt_folder = wx.TextCtrl(self, style=wx.TE_READONLY)
-        self.txt_folder.SetValue(self.i18n.get("hint_no_folder_selected"))
-        sizer.Add(self.txt_folder, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
-
+        # عنوان القائمة يحمل عدد النتائج، فيُنطق تلقائياً عند الانتقال للقائمة
+        self.lbl_list = wx.StaticText(self, label=self.i18n.get("lbl_search_results"))
         self.list_ctrl = wx.ListCtrl(self, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self._insert_columns()
+        sizer.Add(self.lbl_list, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 5)
 
         self.lbl_status = wx.StaticText(self, label="")
@@ -59,12 +67,16 @@ class CrossFileSearchPanel(wx.Panel):
         self.list_ctrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_item_activated)
 
     def _insert_columns(self):
-        self.list_ctrl.InsertColumn(0, self.i18n.get("col_file_name"), width=200)
-        self.list_ctrl.InsertColumn(1, self.i18n.get("col_time"), width=150)
-        self.list_ctrl.InsertColumn(2, self.i18n.get("col_text_snippet"), width=500)
+        # النص أولاً لأن قارئ الشاشة ينطق العمود الأول قبل غيره
+        self.list_ctrl.InsertColumn(0, self.i18n.get("col_text_snippet"), width=500)
+        self.list_ctrl.InsertColumn(1, self.i18n.get("col_file_name"), width=200)
+        self.list_ctrl.InsertColumn(2, self.i18n.get("col_time"), width=150)
 
     def refresh_ui_texts(self):
         self.btn_folder.SetLabel(self.i18n.get("btn_select_search_folder"))
+        self.lbl_folder.SetLabel(self.i18n.get("lbl_search_folder"))
+        self.lbl_query.SetLabel(self.i18n.get("lbl_search_word"))
+        self.lbl_list.SetLabel(self.i18n.get("lbl_search_results"))
         self.txt_query.SetHint(self.i18n.get("hint_search_global"))
         self.btn_search.SetLabel(self.i18n.get("btn_search"))
         if not self.search_dir:
@@ -104,7 +116,7 @@ class CrossFileSearchPanel(wx.Panel):
             try:
                 wx.PostEvent(self, SearchDoneEvent(results, token))
             except RuntimeError:
-                pass  # ط§ظ„ظ†ط§ظپط°ط© ط£ظڈط؛ظ„ظ‚طھ ط£ط«ظ†ط§ط، ط§ظ„ط¨ط­ط«
+                pass  # النافذة أُغلقت أثناء البحث
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -114,11 +126,19 @@ class CrossFileSearchPanel(wx.Panel):
         self.results = event.results
         self._show_results(self.results)
         if self.results:
-            self.lbl_status.SetLabel(self.i18n.get("status_found_results", count=len(self.results)))
+            found = self.i18n.get("status_found_results", count=len(self.results))
+            self.lbl_status.SetLabel(found)
+            # العدد في اسم القائمة: قارئ الشاشة ينطقه عند نقل التركيز إليها
+            self.lbl_list.SetLabel(f"{self.i18n.get('lbl_search_results')} {found}")
             self.list_ctrl.SetFocus()
+            self.list_ctrl.Focus(0)
             self.list_ctrl.Select(0)
         else:
             self.lbl_status.SetLabel(self.i18n.get("status_no_results"))
+            self.lbl_list.SetLabel(self.i18n.get("lbl_search_results"))
+            # رسالة منبثقة لأن النص الثابت لا يُنطق تلقائياً
+            wx.MessageBox(self.i18n.get("status_no_results"), self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
+            self.txt_query.SetFocus()
         self.Layout()
 
     def _show_results(self, results):
@@ -126,9 +146,9 @@ class CrossFileSearchPanel(wx.Panel):
         try:
             self.list_ctrl.DeleteAllItems()
             for idx, res in enumerate(results):
-                self.list_ctrl.InsertItem(idx, res.get("file_name", ""))
-                self.list_ctrl.SetItem(idx, 1, res.get("time_str", ""))
-                self.list_ctrl.SetItem(idx, 2, res.get("text", ""))
+                self.list_ctrl.InsertItem(idx, res.get("text", ""))
+                self.list_ctrl.SetItem(idx, 1, res.get("file_name", ""))
+                self.list_ctrl.SetItem(idx, 2, res.get("time_str", ""))
         finally:
             self.list_ctrl.Thaw()
 

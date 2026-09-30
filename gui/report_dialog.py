@@ -55,6 +55,7 @@ class ReportDialog(wx.Dialog):
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
 
+        sizer.Add(wx.StaticText(panel, label=self.i18n.get("report_main_title")), 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         text_ctrl = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY)
         font = text_ctrl.GetFont()
         font.SetPointSize(11)

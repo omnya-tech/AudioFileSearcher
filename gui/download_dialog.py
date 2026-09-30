@@ -227,6 +227,7 @@ class DownloadDialog(wx.Frame):
 
         self.panel_info = wx.Panel(self.panel)
         info_sizer = wx.BoxSizer(wx.VERTICAL)
+        info_sizer.Add(wx.StaticText(self.panel_info, label=self.i18n.get("lbl_model_details")), 0, wx.LEFT | wx.TOP, 5)
         self.info_list = wx.ListCtrl(self.panel_info, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES | wx.LC_VRULES)
         self.info_list.InsertColumn(0, self.i18n.get("dl_col_prop"), width=160)
         self.info_list.InsertColumn(1, self.i18n.get("dl_col_details"), width=470)
@@ -240,6 +241,7 @@ class DownloadDialog(wx.Frame):
         self.progress_bar = wx.Gauge(self.panel_progress, range=100, style=wx.GA_HORIZONTAL | wx.GA_SMOOTH)
         prog_sizer.Add(self.progress_bar, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 10)
 
+        prog_sizer.Add(wx.StaticText(self.panel_progress, label=self.i18n.get("lbl_download_progress")), 0, wx.LEFT | wx.TOP, 10)
         self.progress_list = wx.ListCtrl(self.panel_progress, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
         self.progress_list.InsertColumn(0, self.i18n.get("dl_col_info"), width=180)
         self.progress_list.InsertColumn(1, self.i18n.get("dl_col_data"), width=450)
@@ -510,6 +512,10 @@ class DownloadDialog(wx.Frame):
         
         self.panel.Layout()
         self.is_downloading = True
+        # الجزء الذي كان عليه التركيز أصبح معطلاً، فننقل التركيز لجدول التقدم حتى لا يضيع
+        self.progress_list.SetFocus()
+        self.progress_list.Focus(0)
+        self.progress_list.Select(0)
         
         self.download_thread = ModelDownloadThread(self, repo_id, current_download_dir, self.current_expected_size, self.i18n)
 

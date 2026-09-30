@@ -136,6 +136,9 @@ class MainWindow(wx.Frame):
             "mi_open_srt": self.i18n.get("menu_open_srt") + "\tCtrl+Shift+O",
             "mi_export": self.i18n.get("menu_export_srt") + "\tCtrl+S",
             "mi_exit": self.i18n.get("menu_exit") + "\tAlt+F4",
+            "mi_focus_filter": self.i18n.get("menu_focus_search") + "\tCtrl+F",
+            "mi_edit_segment": self.i18n.get("menu_edit_segment") + "\tF2",
+            "mi_pause_audio": self.i18n.get("menu_pause_audio") + "\tF3",
             "mi_stop_audio": self.i18n.get("menu_stop_audio") + "\tF4",
             "mi_check_progress": self.i18n.get("menu_check_progress") + "\tCtrl+I",
             "mi_history": self.i18n.get("menu_history") + "\tCtrl+H",
@@ -158,6 +161,10 @@ class MainWindow(wx.Frame):
         self.mi_exit = file_menu.Append(wx.ID_EXIT, labels["mi_exit"])
 
         view_menu = wx.Menu()
+        self.mi_focus_filter = view_menu.Append(wx.ID_ANY, labels["mi_focus_filter"])
+        self.mi_edit_segment = view_menu.Append(wx.ID_ANY, labels["mi_edit_segment"])
+        view_menu.AppendSeparator()
+        self.mi_pause_audio = view_menu.Append(wx.ID_ANY, labels["mi_pause_audio"])
         self.mi_stop_audio = view_menu.Append(wx.ID_ANY, labels["mi_stop_audio"])
         self.mi_check_progress = view_menu.Append(wx.ID_ANY, labels["mi_check_progress"])
         view_menu.AppendSeparator()
@@ -183,6 +190,9 @@ class MainWindow(wx.Frame):
         self.Bind(wx.EVT_MENU, self.on_open_srt, self.mi_open_srt)
         self.Bind(wx.EVT_MENU, self.on_export_srt, self.mi_export)
         self.Bind(wx.EVT_MENU, self.open_settings, self.mi_settings)
+        self.Bind(wx.EVT_MENU, self.on_focus_filter, self.mi_focus_filter)
+        self.Bind(wx.EVT_MENU, self.on_edit_segment, self.mi_edit_segment)
+        self.Bind(wx.EVT_MENU, lambda e: self.audio_player.on_play(None), self.mi_pause_audio)
         self.Bind(wx.EVT_MENU, self.on_stop_audio, self.mi_stop_audio)
         self.Bind(wx.EVT_MENU, self.on_check_progress, self.mi_check_progress)
         self.Bind(wx.EVT_MENU, self.on_open_download_dialog, self.mi_download_model)
@@ -209,10 +219,14 @@ class MainWindow(wx.Frame):
         file_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_select = wx.Button(self.transcription_panel, label=self.i18n.get("btn_select_audio"))
         self.btn_select_folder = wx.Button(self.transcription_panel, label=self.i18n.get("btn_select_folder"))
+        # قارئ الشاشة يأخذ اسم الحقل من النص الثابت الذي يسبقه مباشرة عند الإنشاء،
+        # لذلك يُنشأ كل عنوان قبل الحقل التابع له مباشرة
+        self.lbl_file_path = wx.StaticText(self.transcription_panel, label=self.i18n.get("lbl_selected_file"))
         self.txt_file_path = wx.TextCtrl(self.transcription_panel, style=wx.TE_READONLY)
 
         file_sizer.Add(self.btn_select, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         file_sizer.Add(self.btn_select_folder, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
+        file_sizer.Add(self.lbl_file_path, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         file_sizer.Add(self.txt_file_path, 1, wx.ALL | wx.EXPAND, 5)
         trans_sizer.Add(file_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
@@ -232,8 +246,10 @@ class MainWindow(wx.Frame):
         filter_sizer.Add(self.txt_filter, 1, wx.ALL | wx.EXPAND, 5)
         trans_sizer.Add(filter_sizer, 0, wx.EXPAND | wx.ALL, 5)
 
+        self.lbl_results = wx.StaticText(self.transcription_panel, label=self.i18n.get("lbl_results"))
         self.result_list = wx.ListCtrl(self.transcription_panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self._insert_result_columns()
+        trans_sizer.Add(self.lbl_results, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         trans_sizer.Add(self.result_list, 1, wx.EXPAND | wx.ALL, 10)
 
         self.transcription_panel.SetSizer(trans_sizer)
@@ -261,25 +277,22 @@ class MainWindow(wx.Frame):
         self.btn_export.Bind(wx.EVT_BUTTON, self.on_export_srt)
         self.txt_filter.Bind(wx.EVT_TEXT, self.on_filter_results)
         self.result_list.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_play_segment)
-        self.result_list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
         self.result_list.Bind(wx.EVT_CONTEXT_MENU, self.on_list_context_menu)
         self.Bind(wx.EVT_CLOSE, self.on_exit)
 
         self.setup_button_hover_effects()
 
     def _insert_result_columns(self):
-        self.result_list.InsertColumn(0, self.i18n.get("list_header_time"), width=150)
-        self.result_list.InsertColumn(1, self.i18n.get("list_header_text"), width=700)
+        # عمود النص أولاً: قارئ الشاشة ينطق العمود الأول عند التنقل بالأسهم، فيُسمع الكلام قبل التوقيت
+        self.result_list.InsertColumn(0, self.i18n.get("list_header_text"), width=600)
+        self.result_list.InsertColumn(1, self.i18n.get("list_header_time"), width=130)
+        # الحالة مكتوبة نصاً (وليس باللون فقط) حتى يسمعها مستخدم قارئ الشاشة
+        self.result_list.InsertColumn(2, self.i18n.get("list_header_review"), width=220)
 
     def setup_accessibility(self):
+        # تنبيه: لا نستخدم SetAcceleratorTable هنا، لأنه في ويندوز يستبدل اختصارات القوائم كلها فتتعطل.
+        # كل اختصار يجب أن يكون عنصراً في القوائم (مع \t في اسمه) ليعمل ويظهر للمستخدم.
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_press)
-        # اختصار Ctrl+F لا يوجد في القوائم، فنربطه بمعرف خاص ينقل التركيز لحقل البحث
-        self.id_focus_filter = wx.NewIdRef()
-        self.Bind(wx.EVT_MENU, self.on_focus_filter, id=self.id_focus_filter)
-        accel_tbl = wx.AcceleratorTable([
-            (wx.ACCEL_CTRL, ord('F'), self.id_focus_filter),
-        ])
-        self.SetAcceleratorTable(accel_tbl)
         self.btn_select.SetFocus()
 
     def on_focus_filter(self, event):
@@ -630,8 +643,14 @@ class MainWindow(wx.Frame):
             self.update_title_with_tab()
             self.status_bar.SetStatusText(status_txt)
             self._set_controls_busy(False)
-            self.txt_filter.SetFocus()
             self._close_processing_dialog()
+            # التركيز على أول سطر من النتائج: بعد إغلاق التقرير يسمع المستخدم أول جملة مباشرة
+            self.result_list.SetFocus()
+            if self.result_list.GetItemCount():
+                self.result_list.Focus(0)
+                self.result_list.Select(0)
+            # تنبيه صوتي بانتهاء التفريغ، مفيد لمن يعمل في نافذة أخرى أثناء الانتظار
+            wx.Bell()
 
             if saved_path and self.settings.get("open_folder_after_save", False):
                 self.open_in_file_manager(saved_path)
@@ -682,15 +701,23 @@ class MainWindow(wx.Frame):
 
     # ------------------------------------------------------------------ عرض النتائج
     @staticmethod
-    def _is_weak(seg):
-        """المقطع فيه كلمة واحدة على الأقل النموذج غير متأكد منها"""
+    def _weak_words(seg):
+        """الكلمات التي لم يكن النموذج متأكداً منها في هذا المقطع"""
         words = seg[4] if len(seg) > 4 and seg[4] else []
-        return any(w.get("probability", 1.0) < WEAK_WORD_THRESHOLD for w in words)
+        return [w.get("word", "").strip() for w in words if w.get("probability", 1.0) < WEAK_WORD_THRESHOLD]
+
+    @classmethod
+    def _is_weak(cls, seg):
+        return bool(cls._weak_words(seg))
 
     def _fill_row(self, row, seg_index):
         seg = self.all_segments[seg_index]
-        self.result_list.SetItem(row, 1, seg[1].replace("\n", " "))
-        colour = wx.Colour(200, 40, 40) if self._is_weak(seg) else self.result_list.GetForegroundColour()
+        self.result_list.SetItem(row, 0, seg[1].replace("\n", " "))
+        self.result_list.SetItem(row, 1, format_range(seg[2], seg[3]))
+        weak = self._weak_words(seg)
+        review = self.i18n.get("report_weak_words", words="، ".join(weak)) if weak else ""
+        self.result_list.SetItem(row, 2, review)
+        colour = wx.Colour(200, 40, 40) if weak else self.result_list.GetForegroundColour()
         self.result_list.SetItemTextColour(row, colour)
 
     def update_list(self, indices=None):
@@ -702,8 +729,7 @@ class MainWindow(wx.Frame):
             self.result_list.DeleteAllItems()
             self.displayed_indices = indices
             for seg_index in indices:
-                seg = self.all_segments[seg_index]
-                row = self.result_list.InsertItem(self.result_list.GetItemCount(), format_range(seg[2], seg[3]))
+                row = self.result_list.InsertItem(self.result_list.GetItemCount(), "")
                 # كل سطر يحمل رقم المقطع الأصلي، فالتشغيل والتعديل يعملان حتى أثناء البحث
                 self.result_list.SetItemData(row, seg_index)
                 self._fill_row(row, seg_index)
@@ -728,12 +754,6 @@ class MainWindow(wx.Frame):
         return not self.is_batch_mode and self.audio_path and os.path.isfile(self.audio_path)
 
     # ------------------------------------------------------------------ تعديل النص
-    def on_list_key(self, event):
-        if event.GetKeyCode() == wx.WXK_F2:
-            self.on_edit_segment(None)
-        else:
-            event.Skip()
-
     def on_list_context_menu(self, event):
         row, seg_index = self._selected_segment_index()
         if seg_index is None:
@@ -752,6 +772,9 @@ class MainWindow(wx.Frame):
             return
         row, seg_index = self._selected_segment_index()
         if seg_index is None:
+            # F2 من القائمة بدون سطر محدد: نوضح السبب بدلاً من عدم حدوث أي شيء
+            if self.all_segments:
+                wx.MessageBox(self.i18n.get("msg_select_segment_first"), self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
             return
         seg = self.all_segments[seg_index]
         play = (lambda: self._play(self.audio_path, seg[2])) if self._can_play() else None
@@ -969,6 +992,8 @@ class MainWindow(wx.Frame):
         self.btn_process.SetLabel(self.i18n.get("btn_process"))
         self.btn_export.SetLabel(self.i18n.get("btn_export"))
         self.lbl_filter.SetLabel(self.i18n.get("lbl_search"))
+        self.lbl_file_path.SetLabel(self.i18n.get("lbl_selected_file"))
+        self.lbl_results.SetLabel(self.i18n.get("lbl_results"))
 
         self.result_list.ClearAll()
         self._insert_result_columns()

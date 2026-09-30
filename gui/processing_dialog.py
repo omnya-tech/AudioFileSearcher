@@ -21,6 +21,16 @@ class ProcessingDialog(wx.Dialog):
         wx.CallAfter(self.list_ctrl.SetFocus)
         wx.CallAfter(self.list_ctrl.Select, 0)
 
+        # Ctrl+I يعلن نسبة التقدم من داخل هذه النافذة أيضاً (اختصارات النافذة الرئيسية لا تعمل هنا).
+        # هذه النافذة بلا قوائم، فلا خطر من أن يستبدل جدول الاختصارات اختصارات أخرى
+        id_progress = wx.NewIdRef()
+        self.Bind(wx.EVT_MENU, self.on_announce_progress, id=id_progress)
+        self.SetAcceleratorTable(wx.AcceleratorTable([(wx.ACCEL_CTRL, ord('I'), id_progress)]))
+
+    def on_announce_progress(self, event):
+        if hasattr(self.parent_win, 'on_check_progress'):
+            self.parent_win.on_check_progress(None)
+
     def setup_ui(self):
         self.panel = wx.Panel(self)
         main_sizer = wx.BoxSizer(wx.VERTICAL)

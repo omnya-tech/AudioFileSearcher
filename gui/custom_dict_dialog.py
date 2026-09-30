@@ -38,7 +38,10 @@ class CustomDictDialog(wx.Dialog):
         self.btn_add = wx.Button(panel, label=self.i18n.get("btn_add_word"))
         main_sizer.Add(self.btn_add, 0, wx.ALIGN_RIGHT | wx.RIGHT | wx.LEFT, 15)
         
+        lbl_list = wx.StaticText(panel, label=self.i18n.get("lbl_dict_words"))
+        main_sizer.Add(lbl_list, 0, wx.LEFT | wx.RIGHT | wx.TOP, 15)
         self.dict_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
+        self.dict_list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
         self.dict_list.InsertColumn(0, self.i18n.get("lbl_wrong_word"), width=200)
         self.dict_list.InsertColumn(1, self.i18n.get("lbl_correct_word"), width=300)
         main_sizer.Add(self.dict_list, 1, wx.EXPAND | wx.ALL, 15)
@@ -46,16 +49,21 @@ class CustomDictDialog(wx.Dialog):
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.btn_remove = wx.Button(panel, label=self.i18n.get("btn_remove_word"))
         self.btn_clear = wx.Button(panel, label=self.i18n.get("btn_clear_dict"))
-        self.btn_ok = wx.Button(panel, label=self.i18n.get("btn_ok"))
+        self.btn_ok = wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_ok"))
+        # زر إلغاء صريح: يجعل مفتاح Esc يغلق النافذة دون حفظ
+        self.btn_cancel = wx.Button(panel, id=wx.ID_CANCEL, label=self.i18n.get("btn_cancel"))
         
         btn_sizer.Add(self.btn_remove, 0, wx.RIGHT, 10)
         btn_sizer.Add(self.btn_clear, 0, wx.RIGHT, 10)
         btn_sizer.AddStretchSpacer(1)
-        btn_sizer.Add(self.btn_ok, 0)
+        btn_sizer.Add(self.btn_ok, 0, wx.RIGHT, 10)
+        btn_sizer.Add(self.btn_cancel, 0)
         
         main_sizer.Add(btn_sizer, 0, wx.EXPAND | wx.ALL, 15)
         panel.SetSizer(main_sizer)
         
+        # Enter في خانات الكتابة يضيف الكلمة (ولا يغلق النافذة بالخطأ)
+        self.btn_add.SetDefault()
         self.btn_add.Bind(wx.EVT_BUTTON, self.on_add)
         self.txt_correct.Bind(wx.EVT_TEXT_ENTER, self.on_add)
         self.btn_remove.Bind(wx.EVT_BUTTON, self.on_remove)
@@ -78,16 +86,38 @@ class CustomDictDialog(wx.Dialog):
             self.txt_correct.SetValue("")
             self.txt_wrong.SetFocus()
 
+    def on_list_key(self, event):
+        if event.GetKeyCode() == wx.WXK_DELETE:
+            self.on_remove(None)
+        else:
+            event.Skip()
+
     def on_remove(self, event):
         sel = self.dict_list.GetFirstSelected()
         if sel != -1:
             wrong = self.dict_list.GetItemText(sel)
             if wrong in self.custom_dict: del self.custom_dict[wrong]
             self.populate_list()
-            
+            # إبقاء التركيز في القائمة على السطر التالي، حتى لا يضيع مكان مستخدم قارئ الشاشة
+            count = self.dict_list.GetItemCount()
+            if count:
+                new_sel = min(sel, count - 1)
+                self.dict_list.Select(new_sel)
+                self.dict_list.Focus(new_sel)
+                self.dict_list.SetFocus()
+            else:
+                self.txt_wrong.SetFocus()
+
     def on_clear(self, event):
-        self.custom_dict.clear()
-        self.populate_list()
+        if not self.custom_dict:
+            return
+        dlg = wx.MessageDialog(self, self.i18n.get("msg_clear_dict_confirm"), self.i18n.get("dialog_warning_title"),
+                               wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
+        if dlg.ShowModal() == wx.ID_YES:
+            self.custom_dict.clear()
+            self.populate_list()
+            self.txt_wrong.SetFocus()
+        dlg.Destroy()
 
     def on_ok(self, event):
         self.settings.set("custom_dictionary", self.custom_dict)

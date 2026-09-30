@@ -11,11 +11,19 @@ class HistoryDialog(wx.Dialog):
         self.setup_ui()
         self.load_history()
         self.CenterOnParent()
+        wx.CallAfter(self._focus_list)
+
+    def _focus_list(self):
+        self.list_ctrl.SetFocus()
+        if self.list_ctrl.GetItemCount():
+            self.list_ctrl.Focus(0)
+            self.list_ctrl.Select(0)
 
     def setup_ui(self):
         panel = wx.Panel(self)
         sizer = wx.BoxSizer(wx.VERTICAL)
 
+        sizer.Add(wx.StaticText(panel, label=self.i18n.get("lbl_history_list")), 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
         self.list_ctrl = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL)
         self.list_ctrl.InsertColumn(0, self.i18n.get("history_col_date"), width=150)
         self.list_ctrl.InsertColumn(1, self.i18n.get("history_col_file"), width=300)

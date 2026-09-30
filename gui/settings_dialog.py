@@ -14,6 +14,34 @@ CORRECTION_LEVELS = ["light", "medium", "aggressive"]
 EXPORT_FORMATS = ["srt", "txt", "vtt", "json", "docx"]
 
 
+TEMPERATURE_VALUES = [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]
+NO_SPEECH_VALUES = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+
+class FloatChoice(wx.Choice):
+    """قائمة أرقام عشرية بنفس واجهة SpinCtrlDouble (GetValue/SetValue) لكنها تُقرأ بقارئ الشاشة"""
+
+    def __init__(self, parent, values):
+        super().__init__(parent, choices=[f"{v:g}" for v in values])
+        self.values = values
+
+    def SetValue(self, value):
+        # أقرب قيمة متاحة، حتى لو كانت القيمة المحفوظة من إصدار قديم خارج القائمة
+        idx = min(range(len(self.values)), key=lambda i: abs(self.values[i] - float(value)))
+        self.SetSelection(idx)
+
+    def GetValue(self):
+        return self.values[max(self.GetSelection(), 0)]
+
+
+def readonly_note(parent, text):
+    """ملاحظة نصية تُقرأ بقارئ الشاشة: حقل للقراءة فقط بدون إطار (يصل إليه Tab، عكس النص الثابت)"""
+    ctrl = wx.TextCtrl(parent, value=text, style=wx.TE_READONLY | wx.BORDER_NONE | wx.TE_MULTILINE | wx.TE_NO_VSCROLL)
+    ctrl.SetBackgroundColour(parent.GetBackgroundColour())
+    ctrl.SetMinSize((-1, 40))
+    return ctrl
+
+
 class SettingsDialog(wx.Dialog):
     def __init__(self, parent, i18n: LocalizationManager, settings: SettingsManager):
         super().__init__(parent, title=i18n.get("settings_title"), size=(620, 720), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
@@ -89,8 +117,11 @@ class SettingsDialog(wx.Dialog):
         sizer.Add(lbl_model, 0, wx.ALL, 5)
         sizer.Add(model_sizer, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
-        self.lbl_model_state = wx.StaticText(page, label="")
-        sizer.Add(self.lbl_model_state, 0, wx.ALL, 5)
+        # حالة النموذج (مثبت أم لا) في حقل للقراءة فقط يصل إليه Tab بعد قائمة النماذج مباشرة
+        lbl_state = wx.StaticText(page, label=self.i18n.get("lbl_model_state"))
+        self.lbl_model_state = readonly_note(page, "")
+        sizer.Add(lbl_state, 0, wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        sizer.Add(self.lbl_model_state, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
         self.cb_model.Bind(wx.EVT_CHOICE, lambda e: self.update_model_state())
 
         lbl_local = wx.StaticText(page, label=self.i18n.get("lbl_local_model_path"))
@@ -134,7 +165,7 @@ class SettingsDialog(wx.Dialog):
             text = self.i18n.get("lbl_model_installed")
         else:
             text = self.i18n.get("lbl_model_not_installed")
-        self.lbl_model_state.SetLabel(text)
+        self.lbl_model_state.SetValue(text)
         self.page_engine.Layout()
 
     def on_browse_model(self, event):
@@ -174,33 +205,31 @@ class SettingsDialog(wx.Dialog):
         page.SetScrollRate(0, 10)
         sizer = wx.BoxSizer(wx.VERTICAL)
 
-        self.lbl_advanced_note = wx.StaticText(page, label=self.i18n.get("lbl_advanced_note"))
-        sizer.Add(self.lbl_advanced_note, 0, wx.ALL, 5)
+        # حقل للقراءة فقط بدلاً من نص ثابت: يصل إليه Tab فيُقرأ، بينما النص الثابت لا يُنطق
+        self.lbl_advanced_note = readonly_note(page, self.i18n.get("lbl_advanced_note"))
+        sizer.Add(self.lbl_advanced_note, 0, wx.EXPAND | wx.ALL, 5)
 
         grid = wx.FlexGridSizer(0, 2, 8, 10)
         grid.AddGrowableCol(1, 1)
 
-        def add_row(label_key, ctrl):
+        def add_row(label_key, make_ctrl):
+            # العنوان يُنشأ قبل الحقل حتى يقرأه قارئ الشاشة كاسم له
             grid.Add(wx.StaticText(page, label=self.i18n.get(label_key)), 0, wx.ALIGN_CENTER_VERTICAL)
+            ctrl = make_ctrl()
             grid.Add(ctrl, 1, wx.EXPAND)
+            return ctrl
 
-        self.cb_compute = wx.Choice(page, choices=COMPUTE_TYPES)
-        add_row("lbl_compute_type", self.cb_compute)
-        self.spin_beam = wx.SpinCtrl(page, min=1, max=10)
-        add_row("lbl_beam_size", self.spin_beam)
-        self.spin_temp = wx.SpinCtrlDouble(page, min=0.0, max=1.0, inc=0.1)
-        self.spin_temp.SetDigits(1)
-        add_row("lbl_temperature", self.spin_temp)
+        self.cb_compute = add_row("lbl_compute_type", lambda: wx.Choice(page, choices=COMPUTE_TYPES))
+        self.spin_beam = add_row("lbl_beam_size", lambda: wx.SpinCtrl(page, min=1, max=10))
+        # قوائم اختيار بدلاً من SpinCtrlDouble: الأخير مكوّن من عدة أجزاء فلا يقرأ قارئ الشاشة اسمه
+        self.spin_temp = add_row("lbl_temperature", lambda: FloatChoice(page, TEMPERATURE_VALUES))
         cpu_count = os.cpu_count() or 8
-        self.spin_threads = wx.SpinCtrl(page, min=0, max=cpu_count)
-        self.spin_threads.SetToolTip(self.i18n.get("tip_threads_auto"))
-        add_row("lbl_threads", self.spin_threads)
-        self.spin_no_speech = wx.SpinCtrlDouble(page, min=0.0, max=1.0, inc=0.05)
-        self.spin_no_speech.SetDigits(2)
-        add_row("lbl_no_speech_threshold", self.spin_no_speech)
+        self.spin_threads = add_row("lbl_threads", lambda: wx.SpinCtrl(page, min=0, max=cpu_count))
+        self.spin_no_speech = add_row("lbl_no_speech_threshold", lambda: FloatChoice(page, NO_SPEECH_VALUES))
         sizer.Add(grid, 0, wx.EXPAND | wx.ALL, 5)
 
-        # فلتر الصمت يعمل في المستويين (المبسط والمتقدم)، لذلك لا يتم تعطيله مع باقي الإعدادات المتقدمة
+        # فلتر الصمت يعمل في المستويين (المبسط والمتقدم)، لذلك لا يتم تعطيله مع باقي الإعدادات المتقدمة.
+        # التنبيه المهم مكتوب في اسم الخانة نفسه، لأن التلميحات لا تُنطق عند التنقل بلوحة المفاتيح
         self.chk_vad = wx.CheckBox(page, label=self.i18n.get("chk_vad_filter"))
         self.chk_vad.SetToolTip(self.i18n.get("tip_vad_filter"))
         self.chk_word_ts = wx.CheckBox(page, label=self.i18n.get("chk_word_timestamps"))
@@ -248,7 +277,8 @@ class SettingsDialog(wx.Dialog):
         fmt_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.chk_formats = {}
         for fmt in EXPORT_FORMATS:
-            chk = wx.CheckBox(page, label=fmt.upper())
+            # الاسم الكامل (وليس "SRT" فقط) لأن قارئ الشاشة لا يربط الخانة بالعنوان الذي فوقها
+            chk = wx.CheckBox(page, label=self.i18n.get("chk_export_format", fmt=fmt.upper()))
             self.chk_formats[fmt] = chk
             fmt_sizer.Add(chk, 0, wx.RIGHT, 10)
         sizer.Add(fmt_sizer, 0, wx.LEFT | wx.RIGHT, 5)
