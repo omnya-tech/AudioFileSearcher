@@ -116,6 +116,33 @@ def test_arabic_model_filter(model_id, tags, expected):
     assert HFSearchThread.is_arabic_model(model_id.lower(), tags) is expected
 
 
+def test_model_list_failure_is_readable(main_window, i18n, monkeypatch):
+    """عند فشل جلب النماذج، سبب الفشل يظهر في نفس القائمة التي يقرأها قارئ الشاشة، ويُسجَّل في ملف السجل"""
+    import time
+    import httpx
+    import gui.download_dialog as dd
+    logged = []
+    monkeypatch.setattr(dd, "log_error", logged.append)
+
+    def boom(*a, **k):
+        raise httpx.ConnectError("Max retries exceeded")
+    monkeypatch.setattr(dd.HfApi, "list_models", boom)
+
+    dlg = dd.DownloadDialog(main_window, i18n)
+    dlg.cb_category.SetSelection(1)
+    dlg.on_category_select(None)
+    t0 = time.time()
+    while i18n.get("dl_msg_fetching") in dlg.cb_model.GetString(0) and time.time() - t0 < 10:
+        wx.Yield(); time.sleep(0.05)
+
+    text = dlg.cb_model.GetString(0)
+    assert i18n.get("dl_msg_fetch_failed") in text
+    assert i18n.get("dl_msg_conn_failed") in text
+    assert logged and "Max retries exceeded" in logged[0]
+    assert not dlg.btn_start.IsEnabled()
+    dlg.cleanup_and_destroy()
+
+
 def test_playable_copy_converts_audio(main_window, tmp_path):
     src = tmp_path / "tone.wav"
     tone = (np.sin(np.linspace(0, 440 * 2 * np.pi, 16000)) * 12000).astype(np.int16)

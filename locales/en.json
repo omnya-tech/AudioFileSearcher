@@ -269,5 +269,7 @@
   "status_segment_edited": "Segment edited. Remember to save the results (Ctrl+S).",
   "msg_unsaved_edits": "You have unsaved edits. Save them before continuing?",
   "btn_discard": "Discard",
-  "status_preparing_audio": "Preparing audio for playback..."
+  "status_preparing_audio": "Preparing audio for playback...",
+  "dl_msg_conn_failed": "(no internet connection or the server is not responding).",
+  "dl_msg_retry_hint": "Select the category again to retry."
 }

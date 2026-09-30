@@ -3,11 +3,13 @@ import os
 import re
 import shutil
 import threading
+import traceback
 from huggingface_hub import HfApi
 from huggingface_hub.constants import HF_HUB_CACHE
 from core.i18n import LocalizationManager
 from core.model_downloader import ModelDownloadThread, EVT_DOWNLOAD_RESULT, EVT_DOWNLOAD_PROGRESS
-from core.model_manager import ModelManager  
+from core.model_manager import ModelManager
+from core.logger import log_error
 
 EVT_HF_SEARCH_DONE_ID = wx.NewIdRef()
 EVT_HF_DETAILS_DONE_ID = wx.NewIdRef()
@@ -17,6 +19,30 @@ def EVT_HF_SEARCH_DONE(win, func):
 
 def EVT_HF_DETAILS_DONE(win, func):
     win.Connect(-1, -1, EVT_HF_DETAILS_DONE_ID, func)
+
+def safe_post(window, event):
+    try:
+        wx.PostEvent(window, event)
+    except RuntimeError:
+        pass  # النافذة أُغلقت قبل وصول النتيجة
+
+
+def is_network_error(error):
+    """أخطاء الاتصال (لا إنترنت، مهلة، رفض الاتصال) لها رسالة واضحة بدلاً من النص التقني"""
+    # نفحص سلسلة الأسباب كلها لأن المكتبة تغلّف خطأ الشبكة الأصلي داخل أخطاء أخرى
+    # (httpx في الإصدارات الحديثة، requests في القديمة) دون الاعتماد على وجود أي منهما
+    network_names = ("ConnectError", "ConnectTimeout", "ReadTimeout", "TimeoutException", "TransportError",
+                     "ConnectionError", "Timeout", "NetworkError", "OfflineModeIsEnabled")
+    seen = 0
+    while error is not None and seen < 10:
+        if isinstance(error, (ConnectionError, TimeoutError)):
+            return True
+        if any(cls.__name__ in network_names for cls in type(error).__mro__):
+            return True
+        error = error.__cause__ or error.__context__
+        seen += 1
+    return False
+
 
 class HFSearchResultEvent(wx.PyEvent):
     def __init__(self, data):
@@ -91,9 +117,10 @@ class HFSearchThread(threading.Thread):
                     })
                     if len(results) >= 20: break
                     
-            wx.PostEvent(self.parent, HFSearchResultEvent(results))
+            safe_post(self.parent, HFSearchResultEvent(results))
         except Exception as e:
-            wx.PostEvent(self.parent, HFSearchResultEvent({"error": str(e)}))
+            log_error(f"Model list fetch failed (category {self.category_idx}): {traceback.format_exc()}")
+            safe_post(self.parent, HFSearchResultEvent({"error": e}))
 
 class HFModelDetailsThread(threading.Thread):
     def __init__(self, parent, model_id):
@@ -119,9 +146,10 @@ class HFModelDetailsThread(threading.Thread):
                 "likes": getattr(info, 'likes', 0) or 0,
                 "size_bytes": exact_size
             }
-            wx.PostEvent(self.parent, HFDetailsResultEvent(data))
+            safe_post(self.parent, HFDetailsResultEvent(data))
         except Exception as e:
-            wx.PostEvent(self.parent, HFDetailsResultEvent({"error": str(e)}))
+            log_error(f"Model details fetch failed ({self.model_id}): {traceback.format_exc()}")
+            safe_post(self.parent, HFDetailsResultEvent({"error": e}))
 
 
 class DownloadDialog(wx.Frame):
@@ -316,14 +344,21 @@ class DownloadDialog(wx.Frame):
         
         HFSearchThread(self, selection)
 
+    def describe_error(self, error):
+        if is_network_error(error):
+            return self.i18n.get("dl_msg_conn_failed")
+        return str(error) or type(error).__name__
+
     def on_hf_search_done(self, event):
         self.cb_model.Clear()
         self.cb_model.Enable()
         data = event.data
         if isinstance(data, dict) and "error" in data:
-            self.cb_model.AppendItems([self.i18n.get("dl_msg_fetch_failed")])
+            # السبب يُكتب داخل القائمة نفسها حتى يقرأه قارئ الشاشة مع رسالة الفشل
+            reason = self.describe_error(data["error"])
+            self.cb_model.AppendItems([f"{self.i18n.get('dl_msg_fetch_failed')} {reason} {self.i18n.get('dl_msg_retry_hint')}"])
             self.cb_model.SetSelection(0)
-            self._add_info_item(self.i18n.get("dl_prop_error"), str(data['error']))
+            self._add_info_item(self.i18n.get("dl_prop_error"), reason)
             return
         if not data:
             self.cb_model.AppendItems([self.i18n.get("dl_msg_no_results")])
@@ -351,9 +386,9 @@ class DownloadDialog(wx.Frame):
         self.info_list.DeleteAllItems()
         data = event.data
         if "error" in data:
-            self._add_info_item(self.i18n.get("dl_prop_error"), str(data['error']))
+            self._add_info_item(self.i18n.get("dl_prop_error"), self.describe_error(data["error"]))
             return
-            
+
         self.btn_start.Enable()
         self.current_expected_size = data.get("size_bytes", 0)
         
