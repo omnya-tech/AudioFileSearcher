@@ -1,5 +1,3 @@
-import json
-import os
 import wave
 
 import numpy as np
@@ -52,7 +50,6 @@ def test_weak_segments_highlighted(main_window):
 
 
 def test_edit_segment_while_filtered(main_window, monkeypatch):
-    import gui.main_window as mw
     load_segments(main_window)
     # البحث يُظهر السطر الثاني فقط، والتعديل يجب أن يصيب المقطع الصحيح
     main_window.txt_filter.SetValue("الظالم")
@@ -64,7 +61,8 @@ def test_edit_segment_while_filtered(main_window, monkeypatch):
         def ShowModal(self): return wx.ID_OK
         def get_text(self): return "ولا الضالين"
         def Destroy(self): pass
-    monkeypatch.setattr(mw, "EditSegmentDialog", FakeDialog)
+    import gui.main.results as results
+    monkeypatch.setattr(results, "EditSegmentDialog", FakeDialog)
     main_window.on_edit_segment(None)
 
     assert main_window.all_segments[1][1] == "ولا الضالين"
@@ -294,7 +292,7 @@ def test_no_model_guides_user_instead_of_silent_download(main_window, monkeypatc
 
 
 def test_merge_and_split_in_window(main_window, monkeypatch):
-    import gui.main_window as mw
+    import gui.main.results as results
     load_segments(main_window)
     main_window.result_list.Select(0); main_window.result_list.Focus(0)
     main_window.on_merge_next(None)
@@ -305,9 +303,9 @@ def test_merge_and_split_in_window(main_window, monkeypatch):
         def __init__(self, *a, **k):
             self.txt = type("T", (), {"GetValue": lambda s: "بسم الله الرحمن الرحيم ولا الظالم"})()
             self.split_pos = len("بسم الله الرحمن الرحيم ")
-        def ShowModal(self): return mw.ID_SPLIT
+        def ShowModal(self): return results.ID_SPLIT
         def Destroy(self): pass
-    monkeypatch.setattr(mw, "EditSegmentDialog", SplitDialog)
+    monkeypatch.setattr(results, "EditSegmentDialog", SplitDialog)
     main_window.result_list.Select(0)
     main_window.on_edit_segment(None)
     assert [s[1] for s in main_window.all_segments] == ["بسم الله الرحمن الرحيم", "ولا الظالم"]

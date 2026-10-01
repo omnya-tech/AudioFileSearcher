@@ -33,5 +33,5 @@
     "no_speech_threshold": 0.6,
     "threads": 0,
     "initial_prompt": "",
-    "play_sentence_only": false
+    "play_sentence_only": true
 }

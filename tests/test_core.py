@@ -7,7 +7,8 @@ from core.text_corrector import TextCorrector
 from core.model_manager import ModelManager
 from core.cross_file_search import parse_subtitles, CrossFileSearcher, find_audio_for
 from core.time_utils import format_srt_time, format_range, format_clock
-from core.settings import SettingsManager, BASE_DIR
+from core.settings import SettingsManager
+from core.paths import RESOURCE_DIR as BASE_DIR
 
 DICT = {"المدرسه": "المدرسة", "كورونا": "كوفيد", "ذكاء": "الذكاء", "و": "أو"}
 

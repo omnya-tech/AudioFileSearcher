@@ -1,7 +1,7 @@
 import os
 import json
 
-from core.paths import RESOURCE_DIR as BASE_DIR, CONFIG_FILE, ensure_dir
+from core.paths import CONFIG_FILE, ensure_dir
 
 class SettingsManager:
     def __init__(self, config_file=None):
