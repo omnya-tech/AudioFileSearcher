@@ -1,4 +1,4 @@
-# بناء نسخة exe من البرنامج في مجلد dist\AudioTranscriber
+﻿# بناء نسخة exe من البرنامج في مجلد dist\AudioTranscriber
 # التشغيل:  powershell -ExecutionPolicy Bypass -File build.ps1
 # النماذج لا تُضمَّن (حجمها جيجابايتات): انسخ مجلد models بجانب الـ exe، أو حمّل النموذج من داخل البرنامج.
 
@@ -13,6 +13,7 @@ python -m PyInstaller main.py `
     --clean `
     --add-data "locales;locales" `
     --add-data "assets;assets" `
+    --add-data "docs;docs" `
     --icon "assets/app.ico" `
     --collect-data faster_whisper `
     --collect-binaries ctranslate2 `
@@ -22,4 +23,6 @@ python -m PyInstaller main.py `
     --exclude-module tests
 
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
-Write-Host "Done: dist\AudioTranscriber\AudioTranscriber.exe"
+# ملفات التثبيت بجانب مجلد البرنامج: يكفي نقل مجلد dist كاملاً وتشغيل install.bat
+Copy-Item -Path "installer\*" -Destination "dist" -Force
+Write-Host "Done: dist\AudioTranscriber\AudioTranscriber.exe  (installer: dist\install.bat)"

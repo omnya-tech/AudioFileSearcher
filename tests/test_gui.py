@@ -218,9 +218,9 @@ def test_eta_estimate(main_window, i18n, monkeypatch):
     assert "8 دقائق" in dlg.list_ctrl.GetItemText(1)
     assert dlg.format_eta(30) == i18n.get("eta_less_than_minute")
     # صيغ الجمع العربية: مثنى، جمع (3-10)، ومفرد بعد 10
-    assert dlg.format_eta(120) == "باقي حوالي دقيقتين"
-    assert dlg.format_eta(3 * 3600 + 5 * 60) == "باقي حوالي 3 ساعات و5 دقائق"
-    assert dlg.format_eta(25 * 60) == "باقي حوالي 25 دقيقة"
+    assert dlg.format_eta(120) == "المتبقي نحو دقيقتين"
+    assert dlg.format_eta(3 * 3600 + 5 * 60) == "المتبقي نحو 3 ساعات و5 دقائق"
+    assert dlg.format_eta(25 * 60) == "المتبقي نحو 25 دقيقة"
     dlg.Destroy()
 
 

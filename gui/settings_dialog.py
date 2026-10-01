@@ -351,7 +351,8 @@ class SettingsDialog(wx.Dialog):
             out = os.path.join(dlg.GetPath(), "training_data")
             with wx.BusyInfo(self.i18n.get("status_exporting_training")):
                 exported, skipped = export_dataset(store.samples(), out)
-            wx.MessageBox(self.i18n.get("msg_training_exported", count=exported, skipped=skipped, path=out),
+            wx.MessageBox(self.i18n.get("msg_training_exported", count=self.i18n.plural("n_examples", exported),
+                                                        skipped=self.i18n.plural("n_examples", skipped), path=out),
                           self.i18n.get("dialog_success_title"), wx.ICON_INFORMATION)
         dlg.Destroy()
 

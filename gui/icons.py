@@ -22,6 +22,7 @@ GLYPHS = {
     "merge": ("", "normal"),
     "split": ("", "normal"),
     "apply": ("", "accent"),
+    "guide": ("", "accent"),
     "pause": ("", "normal"),
     "stop": ("", "danger"),
     "progress": ("", "normal"),

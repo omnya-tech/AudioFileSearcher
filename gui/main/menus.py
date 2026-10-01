@@ -36,7 +36,8 @@ class MenusMixin:
             "mi_download_model": self.i18n.get("menu_download_model") + "\tCtrl+D",
             "mi_custom_dict": self.i18n.get("btn_custom_dictionary") + "\tCtrl+K",
             "mi_apply_dict": self.i18n.get("menu_apply_dictionary") + "\tCtrl+Shift+K",
-            "mi_shortcuts": self.i18n.get("menu_shortcuts") + "\tF1",
+            "mi_guide": self.i18n.get("menu_guide") + "\tF1",
+            "mi_shortcuts": self.i18n.get("menu_shortcuts") + "\tShift+F1",
             "mi_about": self.i18n.get("menu_about"),
         }
 
@@ -76,6 +77,7 @@ class MenusMixin:
         self.mi_apply_dict = icons.menu_item(tools_menu, wx.ID_ANY, labels["mi_apply_dict"], "apply")
 
         help_menu = wx.Menu()
+        self.mi_guide = icons.menu_item(help_menu, wx.ID_ANY, labels["mi_guide"], "guide")
         self.mi_shortcuts = icons.menu_item(help_menu, wx.ID_ANY, labels["mi_shortcuts"], "keyboard")
         self.mi_about = icons.menu_item(help_menu, wx.ID_ANY, labels["mi_about"], "info")
 
@@ -103,6 +105,7 @@ class MenusMixin:
         self.Bind(wx.EVT_MENU, self.on_open_custom_dict, self.mi_custom_dict)
         self.Bind(wx.EVT_MENU, self.on_apply_dictionary, self.mi_apply_dict)
         self.Bind(wx.EVT_MENU, self.on_open_history, self.mi_history)
+        self.Bind(wx.EVT_MENU, self.on_guide, self.mi_guide)
         self.Bind(wx.EVT_MENU, self.on_shortcuts, self.mi_shortcuts)
         self.Bind(wx.EVT_MENU, self.on_about, self.mi_about)
         self.Bind(wx.EVT_MENU, self.on_exit, self.mi_exit)
@@ -156,6 +159,14 @@ class MenusMixin:
                                              "shortcut_edit_dialog", "shortcut_processing", "shortcut_dict_delete",
                                              "shortcut_escape")]
         return "\n".join(lines)
+
+    def on_guide(self, event):
+        """دليل الاستخدام بلغة الواجهة الحالية"""
+        from core.guide import load_guide
+        from gui.text_dialog import TextDialog
+        dlg = TextDialog(self, self.i18n, self.i18n.get("menu_guide"), load_guide(self.i18n.language), size=(760, 640))
+        dlg.ShowModal()
+        dlg.Destroy()
 
     def on_shortcuts(self, event):
         from gui.text_dialog import TextDialog

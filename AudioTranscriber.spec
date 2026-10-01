@@ -3,7 +3,7 @@ from PyInstaller.utils.hooks import collect_data_files
 from PyInstaller.utils.hooks import collect_dynamic_libs
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('locales', 'locales')]
+datas = [('locales', 'locales'), ('assets', 'assets'), ('docs', 'docs')]
 binaries = []
 hiddenimports = ['docx']
 datas += collect_data_files('faster_whisper')
@@ -45,6 +45,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=['assets/app.ico'],
 )
 coll = COLLECT(
     exe,

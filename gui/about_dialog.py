@@ -4,7 +4,7 @@ from core.i18n import LocalizationManager
 
 class AboutDialog(wx.Dialog):
     def __init__(self, parent, i18n: LocalizationManager):
-        super().__init__(parent, title=i18n.get("about_title"), size=(420, 380))
+        super().__init__(parent, title=i18n.get("about_title"), size=(500, 470))
         self.i18n = i18n
         i18n.apply_direction(self)
         widgets.fit_to_screen(self)
@@ -28,11 +28,14 @@ class AboutDialog(wx.Dialog):
         font.MakeBold()
         title.SetFont(font)
         
-        version = wx.StaticText(panel, label=self.i18n.get("app_version"))
-        desc = wx.StaticText(panel, label=self.i18n.get("about_description"))
-        desc.Wrap(350)
-        
+        version = wx.StaticText(panel, label=self.i18n.get("about_version", version=self.i18n.get("app_version")))
+        desc = wx.StaticText(panel, label=self.i18n.get("about_description"), style=wx.ALIGN_CENTRE_HORIZONTAL)
+        desc.Wrap(self.FromDIP(440))
+
         dev = wx.StaticText(panel, label=self.i18n.get("about_developer"))
+        dev_font = dev.GetFont()
+        dev_font.MakeBold()
+        dev.SetFont(dev_font)
         
         sizer.Add(title, 0, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL, 10)
         sizer.Add(version, 0, wx.BOTTOM | wx.ALIGN_CENTER_HORIZONTAL, 10)

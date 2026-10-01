@@ -40,7 +40,8 @@ class LearningMixin:
             if learned:
                 self._add_to_dictionary(learned)
                 changed = self.apply_corrections(dict(learned), skip_index=seg_index)
-                self.status_bar.SetStatusText(self.i18n.get("status_learned_auto", words=self._describe(learned), count=changed))
+                self.status_bar.SetStatusText(self.i18n.get("status_learned_auto", words=self._describe(learned),
+                                                                    count=self.i18n.plural("n_lines", changed)))
             return
 
         dlg = wx.MessageDialog(self, self.i18n.get("msg_learn_ask", words=self._describe(pairs),

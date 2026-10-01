@@ -2,8 +2,8 @@
   "app_name": "Audio File Searcher",
   "app_version": "1.0.0",
   "about_title": "About Application",
-  "about_description": "An advanced professional tool designed for high-accuracy audio-to-text transcription, featuring comprehensive file search and multi-format export capabilities. The system operates entirely locally to ensure maximum privacy.",
-  "about_developer": "Developed by: Omneya Software Team",
+  "about_description": "A program that turns audio recordings into written text. It runs entirely on your computer and never sends recordings to the internet, to protect your privacy. You can review and correct the text, search all your transcriptions, export them in several formats, and the program learns from your corrections. It can be used entirely from the keyboard and with a screen reader.",
+  "about_developer": "Developed by: محمد شعراوي, Omnya Software Team",
   "tab_transcription": "Transcription",
   "tab_global_search": "Global Search",
   "tab_engine": "AI Engine",
@@ -366,7 +366,7 @@
   "btn_export_training": "Export training data",
   "msg_no_training_data": "No training data yet. Correct any result line with F2 and it is saved automatically.",
   "status_exporting_training": "Exporting training data...",
-  "msg_training_exported": "Exported {count} training examples to:\n{path}\n\n({skipped} skipped because their audio file is missing.)\nThis is the standard format for fine-tuning Whisper models on a computer with a GPU.",
+  "msg_training_exported": "Exported {count} for training to:\n{path}\n\n({skipped} skipped because their audio files are missing.)\nThis is the standard format for fine-tuning Whisper models on a computer with a GPU.",
   "col_times_corrected": "Times corrected",
   "learning_summary_empty": "Nothing learned yet. Correct any result line with F2 and it will start learning from your fix.",
   "n_corrections_one": "1 correction",
@@ -397,5 +397,7 @@
   "msg_dict_imported": "Imported «{name}»: {corrections} and {terms}.",
   "msg_dict_exported": "Dictionary exported to «{path}». You can share it or move it to another computer.",
   "n_terms_one": "1 term",
-  "n_terms_many": "{n} terms"
+  "n_terms_many": "{n} terms",
+  "about_version": "Version {version}",
+  "menu_guide": "User guide"
 }

@@ -6,8 +6,8 @@ from core.i18n import LocalizationManager
 class TextDialog(wx.Dialog):
     """نافذة لعرض نص طويل للقراءة فقط. التركيز على النص مباشرة ليقرأه قارئ الشاشة بالأسهم"""
 
-    def __init__(self, parent, i18n: LocalizationManager, title, text):
-        super().__init__(parent, title=title, size=(560, 520), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+    def __init__(self, parent, i18n: LocalizationManager, title, text, size=(560, 520)):
+        super().__init__(parent, title=title, size=size, style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER | wx.MAXIMIZE_BOX)
         i18n.apply_direction(self)
         widgets.fit_to_screen(self)
         panel = wx.Panel(self)
