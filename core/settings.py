@@ -3,7 +3,7 @@ import json
 
 from core.paths import APP_DIR, CONFIG_FILE, ensure_dir
 
-# يكتبه مثبت Inno Setup في مجلد البرنامج (انظر installer/AudioTranscriber.iss)
+# يكتبه مثبت Inno Setup في مجلد البرنامج (انظر installer/AudioFileSearcher.iss)
 INSTALLER_LANGUAGE_FILE = "installer_language"
 
 class SettingsManager:

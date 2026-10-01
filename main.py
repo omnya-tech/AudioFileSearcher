@@ -38,7 +38,7 @@ class TranscriptionApp(wx.App):
         paths = [p for p in sys.argv[1:] if os.path.exists(p)]
 
         # نسخة واحدة فقط: لو البرنامج مفتوح، نرسل له الملفات ونخرج بدلاً من تحميل النموذج مرة ثانية
-        self.instance_checker = wx.SingleInstanceChecker(f"AudioTranscriber-{getpass.getuser()}")
+        self.instance_checker = wx.SingleInstanceChecker(f"AudioFileSearcher-{getpass.getuser()}")
         if self.instance_checker.IsAnotherRunning():
             single_instance.send_request(paths)
             return False
@@ -46,7 +46,7 @@ class TranscriptionApp(wx.App):
 
         # اسم ثابت يراه المثبت وبرنامج الإزالة (AppMutex)، فيطلبان إغلاق البرنامج قبل استبدال ملفاته
         self.running_mutexes = [ctypes.windll.kernel32.CreateMutexW(None, False, name)
-                                for name in ("AudioTranscriber.Running", "Global\\AudioTranscriber.Running")]
+                                for name in ("AudioFileSearcher.Running", "Global\\AudioFileSearcher.Running")]
 
         self.settings = SettingsManager()
         self.settings.apply_installer_language()

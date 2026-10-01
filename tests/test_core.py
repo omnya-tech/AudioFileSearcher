@@ -170,7 +170,7 @@ def test_read_only_program_folder_falls_back(tmp_path, monkeypatch):
     import importlib
     reloaded = importlib.reload(paths)
     try:
-        assert reloaded.DATA_DIR == str(tmp_path / "AudioTranscriber")
+        assert reloaded.DATA_DIR == str(tmp_path / "AudioFileSearcher")
         assert reloaded.CONFIG_FILE.startswith(reloaded.DATA_DIR)
         assert reloaded.ensure_dir(reloaded.LOGS_DIR)
         # مجلد نماذج بجانب البرنامج يبقى ضمن أماكن البحث
@@ -178,6 +178,30 @@ def test_read_only_program_folder_falls_back(tmp_path, monkeypatch):
     finally:
         monkeypatch.undo()
         importlib.reload(paths)
+
+
+def test_legacy_appdata_folder_is_moved(tmp_path, monkeypatch):
+    """بيانات AudioTranscriber في %APPDATA% (الاسم التقني القديم) تُنقل للاسم الجديد بإعداداتها"""
+    from core import paths
+    legacy = tmp_path / "AudioTranscriber"
+    legacy.mkdir()
+    (legacy / "config.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    assert paths._user_data_dir() == str(tmp_path / "AudioFileSearcher")
+    assert (tmp_path / "AudioFileSearcher" / "config.json").exists() and not legacy.exists()
+    # لو وُجد المجلد الجديد لا نلمس القديم
+    legacy.mkdir()
+    assert paths._user_data_dir() == str(tmp_path / "AudioFileSearcher") and legacy.exists()
+
+
+def test_legacy_dictionary_file_imports(tmp_path):
+    from core import dictionaries
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps({"format": "audio-transcriber-dictionary", "version": 1, "name": "قرآن",
+                                "corrections": {"سراط": "صراط"}, "terms": ["الفاتحة"]}, ensure_ascii=False),
+                    encoding="utf-8")
+    name, profile = dictionaries.import_file(str(path))
+    assert name == "قرآن" and profile["corrections"] == {"سراط": "صراط"} and profile["terms"] == ["الفاتحة"]
 
 
 def test_logger_survives_unwritable_dir(monkeypatch):

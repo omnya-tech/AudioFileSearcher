@@ -5,7 +5,7 @@ It is designed to be fully usable from the keyboard and with a screen reader (su
 
 ## Installing and starting
 
-- Run the installer (`AudioTranscriber-Setup-1.0.0.exe`, for example) and choose the setup language. The language you choose also becomes the program's language; you can change it later in Settings.
+- Run the installer (`AudioFileSearcher-Setup-1.0.0.exe`, for example) and choose the setup language. The language you choose also becomes the program's language; you can change it later in Settings.
 - The program installs into your user account (no administrator rights needed) and is added to the Start menu. You can also choose to add a desktop shortcut.
 - When you install a newer version over an older one, your settings, dictionaries and models are kept.
 - To remove the program: Windows Settings > Apps. The uninstaller asks whether to delete your data or keep it.

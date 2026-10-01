@@ -20,11 +20,11 @@
 
 ## التثبيت
 
-1. حمّل ملف التثبيت `AudioTranscriber-Setup-<الإصدار>.exe` من صفحة [الإصدارات (Releases)](../../releases).
+1. حمّل ملف التثبيت `AudioFileSearcher-Setup-<الإصدار>.exe` من صفحة [الإصدارات (Releases)](../../releases).
 2. شغّله واختر اللغة؛ فاللغة التي تختارها في المثبت تصبح لغة البرنامج.
 3. عند أول تشغيل، يقترح البرنامج نموذجاً مناسباً لجهازك ويحمّله مرة واحدة، ثم يعمل دون إنترنت.
 
-لا يحتاج التثبيت إلى صلاحيات المسؤول. وللتثبيت لجميع المستخدمين: `AudioTranscriber-Setup-<الإصدار>.exe /ALLUSERS`.
+لا يحتاج التثبيت إلى صلاحيات المسؤول. وللتثبيت لجميع المستخدمين: `AudioFileSearcher-Setup-<الإصدار>.exe /ALLUSERS`.
 
 دليل الاستخدام الكامل داخل البرنامج (زر F1)، وفي مجلد [docs](docs/guide_ar.md).
 
@@ -46,7 +46,7 @@ pip install pyinstaller
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-ينتج عنه البرنامج في `dist\AudioTranscriber`، وملف التثبيت `dist\AudioTranscriber-Setup-<الإصدار>.exe`.
+ينتج عنه البرنامج في `dist\AudioFileSearcher`، وملف التثبيت `dist\AudioFileSearcher-Setup-<الإصدار>.exe`.
 رقم الإصدار مصدره واحد: المفتاح `app_version` في ملفات اللغة `locales`.
 
 ## الاختبارات
@@ -84,11 +84,11 @@ It is designed to be fully usable from the keyboard and with screen readers such
 
 ## Installation
 
-1. Download `AudioTranscriber-Setup-<version>.exe` from the [Releases](../../releases) page.
+1. Download `AudioFileSearcher-Setup-<version>.exe` from the [Releases](../../releases) page.
 2. Run it and choose a language; the language you choose in the installer becomes the program's language.
 3. On first run, the program suggests a model suited to your computer and downloads it once; after that it works offline.
 
-No administrator rights are needed. To install for all users: `AudioTranscriber-Setup-<version>.exe /ALLUSERS`.
+No administrator rights are needed. To install for all users: `AudioFileSearcher-Setup-<version>.exe /ALLUSERS`.
 
 The full user guide is inside the program (F1) and in the [docs](docs/guide_en.md) folder.
 
@@ -110,7 +110,7 @@ pip install pyinstaller
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-This produces the program in `dist\AudioTranscriber` and the installer `dist\AudioTranscriber-Setup-<version>.exe`.
+This produces the program in `dist\AudioFileSearcher` and the installer `dist\AudioFileSearcher-Setup-<version>.exe`.
 The version number has a single source: the `app_version` key in the `locales` files.
 
 ## Tests

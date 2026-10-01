@@ -1,6 +1,6 @@
 ﻿# بناء البرنامج ومثبته:
-#   1) نسخة exe في dist\AudioTranscriber (PyInstaller)
-#   2) المثبت dist\AudioTranscriber-Setup-<الإصدار>.exe (Inno Setup 7)
+#   1) نسخة exe في dist\AudioFileSearcher (PyInstaller)
+#   2) المثبت dist\AudioFileSearcher-Setup-<الإصدار>.exe (Inno Setup 7)
 # التشغيل:  powershell -ExecutionPolicy Bypass -File build.ps1
 #           أضف -SkipInstaller لبناء نسخة exe فقط.
 # النماذج لا تُضمَّن (حجمها جيجابايتات): يحمّلها المستخدم من داخل البرنامج عند أول تشغيل.
@@ -13,7 +13,7 @@ Set-Location $PSScriptRoot
 $Version = (Get-Content "locales\en.json" -Raw -Encoding UTF8 | ConvertFrom-Json).app_version
 
 python -m PyInstaller main.py `
-    --name AudioTranscriber `
+    --name AudioFileSearcher `
     --windowed `
     --onedir `
     --noconfirm `
@@ -30,7 +30,7 @@ python -m PyInstaller main.py `
     --exclude-module tests
 
 if ($LASTEXITCODE -ne 0) { throw "Build failed" }
-Write-Host "Done: dist\AudioTranscriber\AudioTranscriber.exe (version $Version)"
+Write-Host "Done: dist\AudioFileSearcher\AudioFileSearcher.exe (version $Version)"
 if ($SkipInstaller) { exit 0 }
 
 # صفحة الاتفاقية في المثبت بلغته: إشعار بالعربية أو بالإنجليزية، ثم النص الرسمي للرخصة
@@ -45,6 +45,6 @@ foreach ($lang in "ar", "en") {
 $Iscc = @("${env:ProgramFiles}\Inno Setup 7\ISCC.exe", "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
           "${env:LOCALAPPDATA}\Programs\Inno Setup 7\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $Iscc) { throw "Inno Setup was not found. Install it from https://jrsoftware.org/isdl.php" }
-& $Iscc /Q "/DAppVersion=$Version" "installer\AudioTranscriber.iss"
+& $Iscc /Q "/DAppVersion=$Version" "installer\AudioFileSearcher.iss"
 if ($LASTEXITCODE -ne 0) { throw "Installer build failed" }
-Write-Host "Done: dist\AudioTranscriber-Setup-$Version.exe"
+Write-Host "Done: dist\AudioFileSearcher-Setup-$Version.exe"

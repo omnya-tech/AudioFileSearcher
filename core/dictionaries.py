@@ -12,7 +12,9 @@ import csv
 import json
 import os
 
-FILE_FORMAT = "audio-transcriber-dictionary"
+FILE_FORMAT = "audio-file-searcher-dictionary"
+# ملفات صدّرتها الإصدارات السابقة تُستورد كما هي
+LEGACY_FILE_FORMATS = ("audio-transcriber-dictionary",)
 FILE_VERSION = 1
 DEFAULT_NAMES = {"ar": "عام", "en": "General"}
 
@@ -125,7 +127,7 @@ def import_file(path):
             data = json.load(f)
             if not isinstance(data, dict):
                 raise ValueError("unsupported JSON")
-            if data.get("format") == FILE_FORMAT:
+            if data.get("format") in (FILE_FORMAT,) + LEGACY_FILE_FORMATS:
                 name = data.get("name") or name
                 profile = data
             else:
