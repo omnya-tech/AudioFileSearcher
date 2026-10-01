@@ -26,6 +26,7 @@ class SettingsManager:
             "enable_correction": True,
             "correction_level": "medium",
             "use_hotwords": True,
+            "learn_mode": "ask",
             "custom_dictionary": {},
             "language": "ar",
             "theme": "light",

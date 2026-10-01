@@ -14,9 +14,10 @@ from gui.main.menus import MenusMixin
 from gui.main.files import FilesMixin
 from gui.main.transcription import TranscriptionMixin
 from gui.main.results import ResultsMixin
+from gui.main.learning import LearningMixin
 
 
-class MainWindow(AppearanceMixin, MenusMixin, FilesMixin, TranscriptionMixin, ResultsMixin, wx.Frame):
+class MainWindow(AppearanceMixin, MenusMixin, FilesMixin, TranscriptionMixin, ResultsMixin, LearningMixin, wx.Frame):
     """
     النافذة الرئيسية. كل جانب من سلوكها في ملف مستقل داخل gui/main/:
     - appearance.py: المظهر واللغة واتجاه الواجهة وحجم الخط والأيقونات، وعنوان النافذة ومقاسها ومكانها
@@ -24,6 +25,7 @@ class MainWindow(AppearanceMixin, MenusMixin, FilesMixin, TranscriptionMixin, Re
     - files.py: اختيار الملفات والمجلدات، السحب والإفلات، فتح ملفات الترجمة، والحفظ والتصدير
     - transcription.py: تشغيل التفريغ، وضع المجلد، النتائج أول بأول، الحفظ للاسترجاع والاستكمال، والإلغاء
     - results.py: قائمة النتائج: العرض والبحث فيها، التعديل والدمج والتقسيم، وتشغيل الجمل
+    - learning.py: التعلم من تعديلات المستخدم، وتطبيق القاموس على النتائج الحالية
     هذا الملف: بناء الواجهة، وربط الأجزاء ببعضها، واستقبال الملفات من نسخة ثانية، والإغلاق.
     """
 

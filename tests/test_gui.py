@@ -369,3 +369,43 @@ def test_no_control_is_cut_off(main_window, i18n, settings, lang):
             w.Destroy()
         i18n.set_language("ar")
     assert problems == []
+
+
+FATIHA = [("", "سراط الذين أنعمت عليهم", 0.0, 3.0, []), ("", "اهدنا السراط المستقيم", 3.0, 6.0, []),
+          ("", "سراط الذين أنعمت عليهم غير المغضوب", 6.0, 9.0, [])]
+
+
+def test_learn_from_edit_ask_mode(main_window, settings, monkeypatch):
+    main_window.all_segments = list(FATIHA); main_window.update_list()
+    main_window.audio_path = "x.mp3"
+    settings.set("learn_mode", "ask")
+    monkeypatch.setattr(wx.MessageDialog, "ShowModal", lambda self: wx.ID_YES)   # "تعلّم وطبّق على باقي النص"
+    main_window.all_segments[0] = ("", "صراط الذين أنعمت عليهم", 0.0, 3.0, [])
+    main_window.learn_from_edit(0, "سراط الذين أنعمت عليهم", "صراط الذين أنعمت عليهم")
+    assert settings.get("custom_dictionary") == {"سراط": "صراط"}
+    assert main_window.all_segments[2][1] == "صراط الذين أنعمت عليهم غير المغضوب"   # طُبق على باقي النص
+    # المستوى المتوسط يلتقط الكلمة مع "ال" الملتصقة بها: السراط ← الصراط
+    assert main_window.all_segments[1][1] == "اهدنا الصراط المستقيم"
+    assert main_window.learning.count("سراط", "صراط") == 1
+
+
+def test_learn_auto_mode_needs_repetition(main_window, settings):
+    main_window.all_segments = list(FATIHA); main_window.update_list()
+    main_window.audio_path = "x.mp3"
+    settings.set("learn_mode", "auto")
+    main_window.learn_from_edit(0, "سراط الذين", "صراط الذين")
+    assert not settings.get("custom_dictionary")                     # مرة واحدة: لا يتعلم بعد
+    main_window.learn_from_edit(0, "سراط الذين", "صراط الذين")
+    assert settings.get("custom_dictionary") == {"سراط": "صراط"}     # بعد التكرار: يتعلم ويطبّق
+    assert main_window.all_segments[2][1].startswith("صراط")
+
+
+def test_learn_off_and_apply_dictionary_menu(main_window, settings):
+    main_window.all_segments = list(FATIHA); main_window.update_list()
+    settings.set("learn_mode", "off")
+    main_window.learn_from_edit(0, "سراط", "صراط")
+    assert not settings.get("custom_dictionary") and not main_window.learning.samples()
+    settings.set("custom_dictionary", {"سراط": "صراط", "السراط": "الصراط"})
+    main_window.on_apply_dictionary(None)
+    assert [s[1].split()[0] for s in main_window.all_segments] == ["صراط", "اهدنا", "صراط"]
+    assert "الصراط" in main_window.all_segments[1][1] and main_window.unsaved_edits

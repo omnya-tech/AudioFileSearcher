@@ -238,3 +238,55 @@ def test_word_export_direction_follows_text_not_interface(tmp_path):
     paras = [p for p in docx.Document(str(path)).paragraphs if p.text.strip() and p.text != "x"]
     has_bidi = [p._p.pPr is not None and p._p.pPr.find(docx.oxml.ns.qn("w:bidi")) is not None for p in paras]
     assert has_bidi == [True, False]
+
+
+@pytest.mark.parametrize("before, after, expected", [
+    ("سراط الذين أنعمت عليهم ولا الظالم", "صراط الذين أنعمت عليهم ولا الضالين", [("سراط", "صراط"), ("الظالم", "الضالين")]),
+    ("ذهبت الى المدرسه", "ذهبت إلى المدرسة،", [("الى", "إلى"), ("المدرسه", "المدرسة")]),   # كلمة كلمة
+    ("في عام الف وتسعمية", "في عام 1900", [("الف وتسعمية", "1900")]),                     # عبارة قصيرة
+    ("The weather is nice today.", "The weather is nice today", []),                      # ترقيم فقط
+    ("مالك يوم الدين", "مالك يوم الدين والحساب", []),                                     # إضافة لا تصحيح
+    ("one two three four five", "six seven eight nine ten", [("one", "six"), ("two", "seven"), ("three", "eight"), ("four", "nine"), ("five", "ten")]),
+    ("one two three four five", "a b", []),                                               # إعادة صياغة طويلة
+])
+def test_extract_corrections(before, after, expected):
+    from core.learning import extract_corrections
+    assert extract_corrections(before, after) == expected
+
+
+def test_learning_store_and_model_hints(tmp_path):
+    from core.learning import LearningStore, hotwords_for_model
+    store = LearningStore(str(tmp_path / "l.json"))
+    store.record_edit("a.mp3", 1.0, 2.0, "سراط الذين", "صراط الذين")
+    store.record_edit("a.mp3", 5.0, 6.0, "سراط المستقيم", "صراط المستقيم")
+    store.record_edit("a.mp3", 7.0, 8.0, "ولا الظالم", "ولا الضالين")
+    assert store.count("سراط", "صراط") == 2 and len(store.samples()) == 3
+
+    again = LearningStore(str(tmp_path / "l.json"))          # يبقى بعد إعادة فتح البرنامج
+    assert again.count("سراط", "صراط") == 2
+
+    # التلميحات للنموذج: الأكثر تصحيحاً أولاً، ثم باقي القاموس، بدون تكرار
+    hints = hotwords_for_model({"الظالم": "الضالين", "سراط": "صراط", "x": "يدوي"}, again)
+    assert hints.split(", ") == ["صراط", "الضالين", "يدوي"]
+    assert len(hotwords_for_model({str(i): f"w{i}" for i in range(100)}, None, limit=10).split(", ")) == 10
+
+    again.forget("سراط")
+    assert again.count("سراط", "صراط") == 0
+
+
+def test_export_training_data(tmp_path):
+    import csv, wave
+    import numpy as np
+    from core.learning import export_dataset
+    audio = tmp_path / "talk.wav"
+    with wave.open(str(audio), "wb") as w:
+        w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
+        w.writeframes((np.sin(np.linspace(0, 2000, 16000 * 3)) * 5000).astype(np.int16).tobytes())
+    samples = [{"audio": str(audio), "start": 0.5, "end": 1.5, "original": "سراط", "corrected": "صراط"},
+               {"audio": str(tmp_path / "missing.wav"), "start": 0, "end": 1, "original": "a", "corrected": "b"}]
+    exported, skipped = export_dataset(samples, str(tmp_path / "out"))
+    assert (exported, skipped) == (1, 1)
+    rows = list(csv.DictReader(open(tmp_path / "out" / "metadata.csv", encoding="utf-8-sig")))
+    assert rows == [{"file_name": "clip_00001.wav", "transcription": "صراط", "original": "سراط"}]
+    with wave.open(str(tmp_path / "out" / "clip_00001.wav")) as w:
+        assert abs(w.getnframes() - 16000) < 50          # ثانية واحدة من 0.5 إلى 1.5

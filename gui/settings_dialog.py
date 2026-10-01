@@ -5,6 +5,8 @@ import psutil
 from core.i18n import LocalizationManager
 from core.settings import SettingsManager
 from core.model_manager import ModelManager
+from core.learning import LearningStore, export_dataset
+from gui.main.learning import LEARN_MODES
 
 STANDARD_MODELS = ["tiny", "base", "small", "medium", "large-v3", "deepdml/faster-whisper-large-v3-turbo-ct2"]
 # (الكود، الاسم المعروض) — "auto" تعني اكتشاف لغة الملف تلقائياً
@@ -311,19 +313,60 @@ class SettingsDialog(wx.Dialog):
         btn_dict.Bind(wx.EVT_BUTTON, self.on_open_dict)
         sizer.Add(btn_dict, 0, wx.ALL, 5)
 
+        # التعلم من تعديلات المستخدم
+        sizer.Add(wx.StaticLine(page), 0, wx.EXPAND | wx.ALL, 8)
+        sizer.Add(wx.StaticText(page, label=self.i18n.get("lbl_learn_mode")), 0, wx.ALL, 5)
+        self.cb_learn_mode = wx.Choice(page, choices=[self.i18n.get(f"learn_mode_{m}") for m in LEARN_MODES])
+        sizer.Add(self.cb_learn_mode, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
+        sizer.Add(wx.StaticText(page, label=self.i18n.get("lbl_learning_summary")), 0, wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        self.txt_learning = readonly_note(page, "")
+        sizer.Add(self.txt_learning, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
+        btn_export = icons.button(wx.Button(page, label=self.i18n.get("btn_export_training")), "save", theme="light")
+        btn_export.Bind(wx.EVT_BUTTON, self.on_export_training)
+        sizer.Add(btn_export, 0, wx.ALL, 5)
+
         self.chk_enable_corr.Bind(wx.EVT_CHECKBOX, lambda e: self.on_correction_toggled())
         page.SetSizer(sizer)
+        self.update_learning_summary()
+
+    def update_learning_summary(self):
+        store = LearningStore()
+        n_corr, n_samples = len(store.corrections()), len(store.samples())
+        if not n_corr and not n_samples:
+            self.txt_learning.SetValue(self.i18n.get("learning_summary_empty"))
+        else:
+            self.txt_learning.SetValue(self.i18n.get("learning_summary",
+                                                     corrections=self.i18n.plural("n_corrections", n_corr),
+                                                     samples=self.i18n.plural("n_examples", n_samples)))
+
+    def on_export_training(self, event):
+        """تصدير أمثلة التدريب (مقاطع الصوت المصحّحة + نصها الصحيح) لإعادة تدريب النموذج على جهاز آخر"""
+        store = LearningStore()
+        if not store.samples():
+            wx.MessageBox(self.i18n.get("msg_no_training_data"), self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
+            return
+        dlg = wx.DirDialog(self, self.i18n.get("dialog_select_folder"), style=wx.DD_DEFAULT_STYLE)
+        if dlg.ShowModal() == wx.ID_OK:
+            import os
+            out = os.path.join(dlg.GetPath(), "training_data")
+            with wx.BusyInfo(self.i18n.get("status_exporting_training")):
+                exported, skipped = export_dataset(store.samples(), out)
+            wx.MessageBox(self.i18n.get("msg_training_exported", count=exported, skipped=skipped, path=out),
+                          self.i18n.get("dialog_success_title"), wx.ICON_INFORMATION)
+        dlg.Destroy()
 
     def on_correction_toggled(self):
         enabled = self.chk_enable_corr.GetValue()
         self.cb_corr_level.Enable(enabled)
         self.chk_hotwords.Enable(enabled)
+        self.cb_learn_mode.Enable(enabled)
 
     def on_open_dict(self, event):
         from gui.custom_dict_dialog import CustomDictDialog
         dlg = CustomDictDialog(self, self.i18n, self.settings)
         dlg.ShowModal()
         dlg.Destroy()
+        self.update_learning_summary()
 
     # ------------------------------------------------------------------ المظهر
     def setup_appearance_page(self):
@@ -396,6 +439,8 @@ class SettingsDialog(wx.Dialog):
         level = s.get("correction_level", "medium")
         self.cb_corr_level.SetSelection(CORRECTION_LEVELS.index(level) if level in CORRECTION_LEVELS else 1)
         self.chk_hotwords.SetValue(s.get("use_hotwords", True))
+        mode = s.get("learn_mode", "ask")
+        self.cb_learn_mode.SetSelection(LEARN_MODES.index(mode) if mode in LEARN_MODES else 0)
 
         self.cb_lang.SetSelection(0 if s.get("language", "ar") == "ar" else 1)
         self.cb_theme.SetSelection(0 if s.get("theme", "light") == "light" else 1)
@@ -464,6 +509,7 @@ class SettingsDialog(wx.Dialog):
             "enable_correction": self.chk_enable_corr.GetValue(),
             "correction_level": CORRECTION_LEVELS[max(self.cb_corr_level.GetSelection(), 0)],
             "use_hotwords": self.chk_hotwords.GetValue(),
+            "learn_mode": LEARN_MODES[max(self.cb_learn_mode.GetSelection(), 0)],
             "language": new_lang,
             "theme": new_theme,
             "font_size": new_font,

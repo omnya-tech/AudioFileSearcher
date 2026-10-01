@@ -34,6 +34,7 @@ class MenusMixin:
             "mi_settings": self.i18n.get("menu_settings") + "\tCtrl+P",
             "mi_download_model": self.i18n.get("menu_download_model") + "\tCtrl+D",
             "mi_custom_dict": self.i18n.get("btn_custom_dictionary") + "\tCtrl+K",
+            "mi_apply_dict": self.i18n.get("menu_apply_dictionary") + "\tCtrl+Shift+K",
             "mi_shortcuts": self.i18n.get("menu_shortcuts") + "\tF1",
             "mi_about": self.i18n.get("menu_about"),
         }
@@ -71,6 +72,7 @@ class MenusMixin:
         tools_menu.AppendSeparator()
         self.mi_download_model = icons.menu_item(tools_menu, wx.ID_ANY, labels["mi_download_model"], "download")
         self.mi_custom_dict = icons.menu_item(tools_menu, wx.ID_ANY, labels["mi_custom_dict"], "dictionary")
+        self.mi_apply_dict = icons.menu_item(tools_menu, wx.ID_ANY, labels["mi_apply_dict"], "apply")
 
         help_menu = wx.Menu()
         self.mi_shortcuts = icons.menu_item(help_menu, wx.ID_ANY, labels["mi_shortcuts"], "keyboard")
@@ -98,6 +100,7 @@ class MenusMixin:
         self.Bind(wx.EVT_MENU, self.on_check_progress, self.mi_check_progress)
         self.Bind(wx.EVT_MENU, self.on_open_download_dialog, self.mi_download_model)
         self.Bind(wx.EVT_MENU, self.on_open_custom_dict, self.mi_custom_dict)
+        self.Bind(wx.EVT_MENU, self.on_apply_dictionary, self.mi_apply_dict)
         self.Bind(wx.EVT_MENU, self.on_open_history, self.mi_history)
         self.Bind(wx.EVT_MENU, self.on_shortcuts, self.mi_shortcuts)
         self.Bind(wx.EVT_MENU, self.on_about, self.mi_about)

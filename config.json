@@ -19,6 +19,7 @@
     "enable_correction": true,
     "correction_level": "medium",
     "use_hotwords": true,
+    "learn_mode": "ask",
     "custom_dictionary": {},
     "language": "ar",
     "theme": "light",
@@ -33,5 +34,5 @@
     "no_speech_threshold": 0.6,
     "threads": 0,
     "initial_prompt": "",
-    "play_sentence_only": true
+    "play_sentence_only": false
 }

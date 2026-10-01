@@ -25,6 +25,9 @@ def isolated_history(tmp_path, monkeypatch):
     # وسجل الأخطاء أيضاً، حتى لا تظهر أخطاء الاختبارات في سجل المستخدم الحقيقي
     import core.logger as lg
     monkeypatch.setattr(lg._logger_instance, "log_file", str(tmp_path / "app.log"))
+    # وما يتعلمه البرنامج من التعديلات
+    import core.learning as learning
+    monkeypatch.setattr(learning, "LEARNING_FILE", str(tmp_path / "learning.json"))
 
 
 @pytest.fixture(scope="session")
@@ -38,7 +41,10 @@ def wx_app():
 @pytest.fixture
 def settings(tmp_path):
     from core.settings import SettingsManager
-    return SettingsManager(str(tmp_path / "config.json"))
+    s = SettingsManager(str(tmp_path / "config.json"))
+    # سؤال "تحب البرنامج يتعلّم؟" يوقف الاختبارات، فالتعلم متوقف إلا في اختباراته
+    s.set("learn_mode", "off")
+    return s
 
 
 @pytest.fixture

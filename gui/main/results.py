@@ -142,6 +142,8 @@ class ResultsMixin:
                 self._fill_row(row, seg_index)
                 self.unsaved_edits = True
                 self.status_bar.SetStatusText(self.i18n.get("status_segment_edited"))
+                # التعلم مما صحّحه المستخدم (بعد إغلاق نافذة التعديل حتى لا تتداخل النوافذ)
+                wx.CallAfter(self.learn_from_edit, seg_index, seg[1], new_text)
         dlg.Destroy()
         self.result_list.SetFocus()
 

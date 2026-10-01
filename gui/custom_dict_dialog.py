@@ -1,6 +1,7 @@
 import wx
 from gui import icons, widgets
 from core.i18n import LocalizationManager
+from core.learning import LearningStore
 from core.settings import SettingsManager
 
 class CustomDictDialog(wx.Dialog):
@@ -12,6 +13,8 @@ class CustomDictDialog(wx.Dialog):
         self.settings = settings
         # نعمل على نسخة، فلا تتغير الإعدادات إلا عند الضغط على موافق
         self.custom_dict = dict(self.settings.get("custom_dictionary", {}) or {})
+        self.learning = LearningStore()
+        self._removed = set()
         self.setup_ui()
         self.populate_list()
         self.apply_theme(self.settings.get("theme", "light"))
@@ -45,7 +48,10 @@ class CustomDictDialog(wx.Dialog):
         self.dict_list = wx.ListCtrl(panel, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_HRULES)
         self.dict_list.Bind(wx.EVT_KEY_DOWN, self.on_list_key)
         self.dict_list.InsertColumn(0, self.i18n.get("lbl_wrong_word"), width=self.FromDIP(200))
-        self.dict_list.InsertColumn(1, self.i18n.get("lbl_correct_word"), width=self.FromDIP(300))
+        self.dict_list.InsertColumn(1, self.i18n.get("lbl_correct_word"), width=self.FromDIP(220))
+        # كم مرة صحّح المستخدم هذه الكلمة بنفسه (0 = أُضيفت يدوياً للقاموس)
+        self.dict_list.InsertColumn(2, self.i18n.get("col_times_corrected"), width=self.FromDIP(90))
+        widgets.auto_fit_first_column(self.dict_list, column=1, min_width=self.FromDIP(120))
         main_sizer.Add(self.dict_list, 1, wx.EXPAND | wx.ALL, 15)
         
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -74,9 +80,13 @@ class CustomDictDialog(wx.Dialog):
 
     def populate_list(self):
         self.dict_list.DeleteAllItems()
+        counts = {}
+        for entry in self.learning.corrections():
+            counts[entry["wrong"]] = counts.get(entry["wrong"], 0) + entry.get("count", 0)
         for wrong, correct in self.custom_dict.items():
             idx = self.dict_list.InsertItem(self.dict_list.GetItemCount(), wrong)
             self.dict_list.SetItem(idx, 1, correct)
+            self.dict_list.SetItem(idx, 2, str(counts.get(wrong, 0)))
 
     def on_add(self, event):
         wrong = self.txt_wrong.GetValue().strip()
@@ -98,7 +108,9 @@ class CustomDictDialog(wx.Dialog):
         sel = self.dict_list.GetFirstSelected()
         if sel != -1:
             wrong = self.dict_list.GetItemText(sel)
-            if wrong in self.custom_dict: del self.custom_dict[wrong]
+            if wrong in self.custom_dict:
+                del self.custom_dict[wrong]
+                self._removed.add(wrong)
             self.populate_list()
             # إبقاء التركيز في القائمة على السطر التالي، حتى لا يضيع مكان مستخدم قارئ الشاشة
             count = self.dict_list.GetItemCount()
@@ -116,6 +128,7 @@ class CustomDictDialog(wx.Dialog):
         dlg = wx.MessageDialog(self, self.i18n.get("msg_clear_dict_confirm"), self.i18n.get("dialog_warning_title"),
                                wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)
         if dlg.ShowModal() == wx.ID_YES:
+            self._removed.update(self.custom_dict)
             self.custom_dict.clear()
             self.populate_list()
             self.txt_wrong.SetFocus()
@@ -123,6 +136,9 @@ class CustomDictDialog(wx.Dialog):
 
     def on_ok(self, event):
         self.settings.set("custom_dictionary", self.custom_dict)
+        # الكلمات المحذوفة يُنسى تعلّمها أيضاً، حتى لا تُعطى للنموذج كتلميح بعد الآن
+        for wrong in self._removed - set(self.custom_dict):
+            self.learning.forget(wrong)
         self.EndModal(wx.ID_OK)
         
     def apply_theme(self, theme):
