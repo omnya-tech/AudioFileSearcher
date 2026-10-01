@@ -1,17 +1,38 @@
-import sys
-import re
+"""
+تحميل نماذج Whisper من HuggingFace مع تقدم حقيقي وإلغاء فوري واستكمال بعد الانقطاع.
+
+كنا نقرأ شريط التقدم الذي تطبعه snapshot_download، لكن الإصدارات الحديثة من huggingface_hub لم تعد تطبع
+تقدم كل ملف بالبايت (تطبع عدد الملفات فقط)، فكانت النافذة تبقى على «جارٍ الاتصال» والتحميل يجري في الخلفية،
+ولا يتوقف عند الإلغاء. الآن نحمّل الملفات بأنفسنا:
+  - التقدم بالبايت مهما كان عدد الملفات، والسرعة على آخر بضع ثوانٍ.
+  - الإلغاء يُفحص بين كل دفعتين من البيانات.
+  - كل ملف يُكتب في ‎.part‎ ويُكمَل من حيث توقف، وmodel.bin آخر ملف، فلا يصبح المجلد نموذجاً صالحاً إلا كاملاً.
+"""
+import os
 import threading
+import time
+
 import wx
-from huggingface_hub import snapshot_download, HfApi
 
 EVT_DOWNLOAD_RESULT_ID = wx.NewIdRef()
 EVT_DOWNLOAD_PROGRESS_ID = wx.NewIdRef()
 
+# دفعة صغيرة: التقدم يتحدث والإلغاء يستجيب بسرعة حتى على اتصال بطيء
+CHUNK = 1024 * 64
+SKIP_FILES = (".gitattributes",)
+# أقل فاصل بين تحديثين للواجهة (لا داعي لتحديثها مع كل دفعة بيانات)
+PROGRESS_INTERVAL = 0.5
+# السرعة محسوبة على آخر هذه الثواني
+SPEED_WINDOW = 5.0
+
+
 def EVT_DOWNLOAD_RESULT(win, func):
     win.Connect(-1, -1, EVT_DOWNLOAD_RESULT_ID, func)
 
+
 def EVT_DOWNLOAD_PROGRESS(win, func):
     win.Connect(-1, -1, EVT_DOWNLOAD_PROGRESS_ID, func)
+
 
 class DownloadResultEvent(wx.PyEvent):
     def __init__(self, status, data=None):
@@ -19,6 +40,7 @@ class DownloadResultEvent(wx.PyEvent):
         self.SetEventType(EVT_DOWNLOAD_RESULT_ID)
         self.status = status
         self.data = data
+
 
 class DownloadProgressEvent(wx.PyEvent):
     def __init__(self, percent, speed, downloaded, remaining, total, eta):
@@ -31,160 +53,62 @@ class DownloadProgressEvent(wx.PyEvent):
         self.total = total
         self.eta = eta
 
+
 class DownloadAborted(Exception):
     pass
 
-class StderrInterceptor:
-    def __init__(self, parent, expected_size, i18n, is_aborted=None):
-        self.parent = parent
-        self.is_aborted = is_aborted or (lambda: False)
-        self.expected_size = expected_size
-        self.i18n = i18n
-        self.original_stderr = sys.stderr
-        self.buffer = ""
-        self.max_dl_bytes = 0
-        
-        self.total_str = self.format_size(self.expected_size) if self.expected_size > 0 else self.i18n.get("dl_val_unknown", "غير معروف")
 
-    def format_size(self, size_bytes):
-        unit_gb = self.i18n.get('unit_gb', 'جيجابايت')
-        unit_mb = self.i18n.get('unit_mb', 'ميجابايت')
-        unit_kb = self.i18n.get('unit_kb', 'كيلوبايت')
-        unit_b = self.i18n.get('unit_b', 'بايت')
-        
-        if size_bytes >= 1024**3: return f"{size_bytes / 1024**3:.2f} {unit_gb}"
-        elif size_bytes >= 1024**2: return f"{size_bytes / 1024**2:.2f} {unit_mb}"
-        elif size_bytes >= 1024: return f"{size_bytes / 1024:.2f} {unit_kb}"
-        return f"{int(size_bytes)} {unit_b}"
+def repo_files(repo_id, api=None):
+    """[(اسم الملف، الحجم بالبايت)] مع model.bin في آخر القائمة"""
+    from huggingface_hub import HfApi
+    info = (api or HfApi()).model_info(repo_id, files_metadata=True)
+    files = [(s.rfilename, int(getattr(s, "size", None) or 0)) for s in info.siblings if s.rfilename not in SKIP_FILES]
+    files.sort(key=lambda f: f[0] == "model.bin")
+    return files
 
-    def translate_speed_str(self, speed_str):
-        s = speed_str.upper()
-        unit_gb_s = self.i18n.get('unit_gb_s', 'جيجابايت/ثانية')
-        unit_mb_s = self.i18n.get('unit_mb_s', 'ميجابايت/ثانية')
-        unit_kb_s = self.i18n.get('unit_kb_s', 'كيلوبايت/ثانية')
-        unit_b_s = self.i18n.get('unit_b_s', 'بايت/ثانية')
-        
-        s = s.replace('GB/S', f" {unit_gb_s}")
-        s = s.replace('MB/S', f" {unit_mb_s}")
-        s = s.replace('KB/S', f" {unit_kb_s}")
-        s = s.replace('B/S', f" {unit_b_s}")
-        return s.strip()
 
-    def write(self, text):
-        # شريط التقدم يكتب هنا باستمرار من خيوط التحميل، فنستغل ذلك لإيقاف التحميل فوراً عند الإلغاء
-        if self.is_aborted() and threading.current_thread() is not threading.main_thread():
-            raise DownloadAborted()
-        if self.original_stderr is not None:
-            try: self.original_stderr.write(text)
-            except Exception: pass
-        self.buffer += text
-        while '\r' in self.buffer or '\n' in self.buffer:
-            if '\r' in self.buffer:
-                line, self.buffer = self.buffer.split('\r', 1)
-            else:
-                line, self.buffer = self.buffer.split('\n', 1)
-            if line.strip():
-                self.parse_line(line)
+def format_size(size_bytes, i18n):
+    if size_bytes >= 1024 ** 3:
+        return f"{size_bytes / 1024 ** 3:.2f} {i18n.get('unit_gb', 'GB')}"
+    if size_bytes >= 1024 ** 2:
+        return f"{size_bytes / 1024 ** 2:.2f} {i18n.get('unit_mb', 'MB')}"
+    if size_bytes >= 1024:
+        return f"{size_bytes / 1024:.2f} {i18n.get('unit_kb', 'KB')}"
+    return f"{int(size_bytes)} {i18n.get('unit_b', 'B')}"
 
-    def flush(self):
-        if self.original_stderr is not None:
-            try: self.original_stderr.flush()
-            except Exception: pass
 
-    def isatty(self):
-        return False
+def format_speed(bytes_per_second, i18n):
+    for key, factor in (("unit_gb_s", 1024 ** 3), ("unit_mb_s", 1024 ** 2), ("unit_kb_s", 1024)):
+        if bytes_per_second >= factor:
+            return f"{bytes_per_second / factor:.2f} {i18n.get(key)}"
+    return f"{int(bytes_per_second)} {i18n.get('unit_b_s')}"
 
-    def parse_line(self, line):
-        if "B/s" not in line and "it/s" not in line:
-            return
 
-        clean_line = line.replace(" ", "")
+def format_eta(seconds):
+    m, s = divmod(int(seconds), 60)
+    h, m = divmod(m, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
-        speed_str = ""
-        speed_bytes = 0
-        speed_match = re.search(r'([\d.]+[kMGT]?B/s)', clean_line, re.IGNORECASE)
-        if speed_match:
-            speed_str = speed_match.group(1).upper()
-            try:
-                s_val = float(re.findall(r'[\d.]+', speed_str)[0])
-                if 'K' in speed_str: speed_bytes = s_val * 1024
-                elif 'M' in speed_str: speed_bytes = s_val * 1024**2
-                elif 'G' in speed_str: speed_bytes = s_val * 1024**3
-                else: speed_bytes = s_val
-            except: pass
-
-        dl_str = ""
-        dl_bytes = 0
-        dl_match = re.search(r'([\d.]+[kMGT]?B?),[\d.]+[kMGT]?B/s', clean_line, re.IGNORECASE)
-        if not dl_match:
-            dl_match = re.search(r'\|([\d.]+[kMGT]?B?),', clean_line, re.IGNORECASE)
-
-        if dl_match:
-            dl_str = dl_match.group(1).upper()
-            if not dl_str.endswith('B'): dl_str += 'B'
-            try:
-                val = float(re.findall(r'[\d.]+', dl_str)[0])
-                if 'K' in dl_str: dl_bytes = val * 1024
-                elif 'M' in dl_str: dl_bytes = val * 1024**2
-                elif 'G' in dl_str: dl_bytes = val * 1024**3
-                else: dl_bytes = val
-            except: pass
-
-        if not dl_str or not speed_str:
-            return
-
-        # الحماية من تراجع شريط التحميل
-        if dl_bytes > self.max_dl_bytes:
-            self.max_dl_bytes = dl_bytes
-        else:
-            dl_bytes = self.max_dl_bytes
-
-        # التمدد الذكي في حال تجاوز الحجم الفعلي الحجم المتوقع
-        if dl_bytes >= self.expected_size:
-            self.expected_size = dl_bytes + (15 * 1024 * 1024)
-            self.total_str = f"~ {self.format_size(self.expected_size)}"
-
-        percent = 0
-        eta_str = "..."
-        remaining_str = "..."
-
-        if self.expected_size > 0:
-            safe_dl_bytes = min(dl_bytes, self.expected_size) 
-            percent = int((safe_dl_bytes / self.expected_size) * 100)
-            percent = min(max(percent, 0), 99) 
-
-            remaining_bytes = self.expected_size - safe_dl_bytes
-            remaining_str = self.format_size(remaining_bytes)
-
-            if speed_bytes > 0:
-                eta = remaining_bytes / speed_bytes
-                if eta > 0:
-                    m, s = divmod(int(eta), 60)
-                    h, m = divmod(m, 60)
-                    eta_str = f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
-
-        # ترجمة الوحدات إلى لغة الواجهة
-        loc_speed_str = self.translate_speed_str(speed_str)
-        loc_dl_str = self.format_size(dl_bytes)
-
-        try:
-            wx.PostEvent(self.parent, DownloadProgressEvent(percent, loc_speed_str, loc_dl_str, remaining_str, self.total_str, eta_str))
-        except RuntimeError:
-            pass  # نافذة التحميل أُغلقت
 
 class ModelDownloadThread(threading.Thread):
-    def __init__(self, parent, model_id, save_dir, expected_size, i18n):
+    def __init__(self, parent, model_id, save_dir, expected_size, i18n, client=None, files=None):
         super().__init__(daemon=True)
         self.parent = parent
-        self.model_id = model_id
+        self.repo_id = model_id if "/" in model_id else f"Systran/faster-whisper-{model_id}"
         self.save_dir = save_dir
-        self.expected_size = expected_size
+        self.total = expected_size or 0
         self.i18n = i18n
-        self._abort = False
+        # للاختبارات: عميل HTTP وقائمة ملفات جاهزة بدلاً من الإنترنت
+        self.client = client
+        self.files = files
+        self.downloaded = 0
+        self._abort = threading.Event()
+        self._samples = []
+        self._last_post = 0.0
         self.start()
 
     def abort(self):
-        self._abort = True
+        self._abort.set()
 
     def _post(self, event):
         try:
@@ -193,34 +117,93 @@ class ModelDownloadThread(threading.Thread):
             pass  # النافذة أُغلقت
 
     def run(self):
-        original_stderr = sys.stderr
+        import httpx
+        own_client = self.client is None
+        client = self.client or httpx.Client(follow_redirects=True, timeout=httpx.Timeout(30.0, read=60.0))
         try:
-            repo_id = self.model_id if "/" in self.model_id else f"Systran/faster-whisper-{self.model_id}"
-
-            try:
-                api = HfApi()
-                info = api.model_info(repo_id, files_metadata=True)
-                exact_size = sum(f.size for f in info.siblings if getattr(f, 'size', None) is not None)
-                if exact_size > 0:
-                    self.expected_size = exact_size
-            except Exception:
-                pass
-
-            if self._abort:
-                return
-
-            sys.stderr = StderrInterceptor(self.parent, self.expected_size, self.i18n, is_aborted=lambda: self._abort)
-
-            snapshot_download(
-                repo_id=repo_id,
-                local_dir=self.save_dir
-            )
-
-            if not self._abort:
-                self._post(DownloadResultEvent("success", self.save_dir))
-
+            if self.files is None:
+                self.files = repo_files(self.repo_id)
+            self.total = sum(size for _, size in self.files) or self.total
+            os.makedirs(self.save_dir, exist_ok=True)
+            # ما اكتمل سابقاً (أو جزئياً) يُحسب من البداية حتى تكون النسبة صحيحة عند الاستكمال
+            self.downloaded = sum(self._existing_size(name, size) for name, size in self.files)
+            self._progress(force=True)
+            for name, size in self.files:
+                self._download_file(client, name, size)
+            self._post(DownloadResultEvent("success", self.save_dir))
+        except DownloadAborted:
+            pass
         except Exception as e:
-            if not self._abort and not isinstance(e, DownloadAborted):
-                self._post(DownloadResultEvent("error", str(e)))
+            if not self._abort.is_set():
+                self._post(DownloadResultEvent("error", str(e) or type(e).__name__))
         finally:
-            sys.stderr = original_stderr
+            if own_client:
+                client.close()
+
+    # ---------- الملفات ----------
+
+    def _paths(self, name):
+        final = os.path.join(self.save_dir, *name.split("/"))
+        return final, final + ".part"
+
+    def _existing_size(self, name, size):
+        final, part = self._paths(name)
+        if os.path.isfile(final) and (not size or os.path.getsize(final) == size):
+            return size or os.path.getsize(final)
+        return os.path.getsize(part) if os.path.isfile(part) else 0
+
+    def _download_file(self, client, name, size):
+        from huggingface_hub import hf_hub_url
+        final, part = self._paths(name)
+        if os.path.isfile(final) and (not size or os.path.getsize(final) == size):
+            return
+        os.makedirs(os.path.dirname(final), exist_ok=True)
+        have = os.path.getsize(part) if os.path.isfile(part) else 0
+        if size and have > size:
+            # ملف جزئي أكبر من الحقيقي (تغيّر الملف على الخادم): نبدأ من جديد
+            self.downloaded -= have
+            have = 0
+            os.remove(part)
+        if not size or have < size:
+            headers = {"Range": f"bytes={have}-"} if have else {}
+            with client.stream("GET", hf_hub_url(self.repo_id, name), headers=headers) as response:
+                if have and response.status_code == 200:
+                    # الخادم تجاهل طلب الاستكمال وأرسل الملف كاملاً
+                    self.downloaded -= have
+                    have = 0
+                response.raise_for_status()
+                with open(part, "ab" if have else "wb") as f:
+                    for chunk in response.iter_bytes(CHUNK):
+                        if self._abort.is_set():
+                            raise DownloadAborted()
+                        f.write(chunk)
+                        self.downloaded += len(chunk)
+                        self._progress()
+        if size and os.path.getsize(part) != size:
+            raise IOError(f"Incomplete file {name}: {os.path.getsize(part)} of {size} bytes")
+        os.replace(part, final)
+
+    # ---------- التقدم ----------
+
+    def speed(self):
+        if len(self._samples) < 2:
+            return 0.0
+        (t0, b0), (t1, b1) = self._samples[0], self._samples[-1]
+        return (b1 - b0) / (t1 - t0) if t1 > t0 else 0.0
+
+    def _progress(self, force=False):
+        now = time.monotonic()
+        self._samples.append((now, self.downloaded))
+        while len(self._samples) > 2 and self._samples[0][0] < now - SPEED_WINDOW:
+            self._samples.pop(0)
+        if not force and now - self._last_post < PROGRESS_INTERVAL:
+            return
+        self._last_post = now
+        i18n = self.i18n
+        total = max(self.total, self.downloaded)
+        percent = min(99, int(self.downloaded * 100 / total)) if total else 0
+        speed = self.speed()
+        remaining = max(0, total - self.downloaded)
+        eta = format_eta(remaining / speed) if speed > 0 else "..."
+        self._post(DownloadProgressEvent(percent, format_speed(speed, i18n), format_size(self.downloaded, i18n),
+                                         format_size(remaining, i18n), format_size(total, i18n), eta))
