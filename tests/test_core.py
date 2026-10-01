@@ -290,3 +290,55 @@ def test_export_training_data(tmp_path):
     assert rows == [{"file_name": "clip_00001.wav", "transcription": "صراط", "original": "سراط"}]
     with wave.open(str(tmp_path / "out" / "clip_00001.wav")) as w:
         assert abs(w.getnframes() - 16000) < 50          # ثانية واحدة من 0.5 إلى 1.5
+
+
+def test_dictionaries_migration_and_profiles(tmp_path):
+    from core import dictionaries
+    s = SettingsManager(str(tmp_path / "c.json"))
+    s.set("custom_dictionary", {"سراط": "صراط"})                 # إعدادات إصدار قديم: قاموس واحد
+    assert dictionaries.names(s) == ["عام"]
+    assert dictionaries.active_corrections(s) == {"سراط": "صراط"}  # لا يضيع شيء عند النقل
+
+    profiles = dictionaries.all_profiles(s)
+    profiles["محاضرات"] = {"corrections": {"اكشن": "أكشن"}, "terms": ["تشارلز باباج"]}
+    dictionaries.save_all(s, profiles, "محاضرات")
+    assert dictionaries.active_terms(s) == ["تشارلز باباج"]
+
+    # التعلم يذهب للقاموس النشط فقط: تصحيح المحاضرات لا يدخل قاموس القرآن والعكس
+    dictionaries.add_corrections(s, [("الظالم", "الظلم")])
+    assert "الظالم" in dictionaries.get(s, "محاضرات")["corrections"]
+    assert "الظالم" not in dictionaries.get(s, "عام")["corrections"]
+
+    reloaded = SettingsManager(str(tmp_path / "c.json"))
+    assert dictionaries.active_name(reloaded) == "محاضرات" and dictionaries.names(reloaded) == ["عام", "محاضرات"]
+
+
+def test_dictionary_import_export_formats(tmp_path):
+    from core import dictionaries
+    profile = {"corrections": {"سراط": "صراط"}, "terms": ["الفاتحة", "الفاتحة", " "]}
+    dictionaries.export_file(str(tmp_path / "quran.json"), "قرآن", profile)
+    name, imported = dictionaries.import_file(str(tmp_path / "quran.json"))
+    assert name == "قرآن" and imported == {"corrections": {"سراط": "صراط"}, "terms": ["الفاتحة"]}
+
+    (tmp_path / "medical.csv").write_text("ضغت,ضغط\nالسكرى,السكري\nأنسولين\n", encoding="utf-8")
+    name, imported = dictionaries.import_file(str(tmp_path / "medical.csv"))
+    assert name == "medical" and imported["corrections"] == {"ضغت": "ضغط", "السكرى": "السكري"} and imported["terms"] == ["أنسولين"]
+
+    (tmp_path / "names.txt").write_text("# أسماء\nأحمد شوقي\nسراط ← صراط\nاكشن = أكشن\n", encoding="utf-8")
+    _, imported = dictionaries.import_file(str(tmp_path / "names.txt"))
+    assert imported["terms"] == ["أحمد شوقي"] and imported["corrections"] == {"سراط": "صراط", "اكشن": "أكشن"}
+
+    (tmp_path / "plain.json").write_text('{"ا": "ب"}', encoding="utf-8")          # قاموس بسيط {خطأ: صحيح}
+    assert dictionaries.import_file(str(tmp_path / "plain.json"))[1]["corrections"] == {"ا": "ب"}
+
+    (tmp_path / "empty.txt").write_text("\n# فقط تعليق\n", encoding="utf-8")
+    with pytest.raises(ValueError):
+        dictionaries.import_file(str(tmp_path / "empty.txt"))
+
+    merged = dictionaries.merge({"corrections": {"a": "b"}, "terms": ["x"]}, {"corrections": {"a": "c", "d": "e"}, "terms": ["x", "y"]})
+    assert merged == {"corrections": {"a": "c", "d": "e"}, "terms": ["x", "y"]}
+
+
+def test_terms_go_to_model_first():
+    from core.learning import hotwords_for_model
+    assert hotwords_for_model({"سراط": "صراط"}, None, terms=["تشارلز باباج"]).split(", ") == ["تشارلز باباج", "صراط"]

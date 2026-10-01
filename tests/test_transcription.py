@@ -43,7 +43,8 @@ def test_real_transcription_with_dictionary_cancel_and_rerun(main_window, settin
     monkeypatch.setattr(ReportDialog, "ShowModal", lambda self: reports.append(self.report) or wx.ID_OK)
 
     settings.update({"user_mode": "advanced", "transcription_language": "en", "model_size": MODEL,
-                     "use_local_model": True, "custom_dictionary": {"weather": "WEATHER"},
+                     "use_local_model": True, "dictionaries": {"test": {"corrections": {"weather": "WEATHER"}, "terms": []}},
+                     "active_dictionary": "test",
                      "auto_save": True, "output_directory": str(tmp_path), "default_export_format": "srt",
                      "open_folder_after_save": False})
 
@@ -73,7 +74,8 @@ def test_resume_continues_after_saved_part(main_window, settings, speech_wav, tm
     from gui.report_dialog import ReportDialog
     monkeypatch.setattr(ReportDialog, "ShowModal", lambda self: wx.ID_OK)
     settings.update({"user_mode": "advanced", "transcription_language": "en", "model_size": MODEL,
-                     "use_local_model": True, "custom_dictionary": {}, "auto_save": False})
+                     "use_local_model": True, "dictionaries": {"test": {"corrections": {}, "terms": []}},
+                     "active_dictionary": "test", "auto_save": False})
 
     previous = [("00:00 - 00:02", "PREVIOUS PART", 0.0, 2.0, [])]
     recovery.save(speech_wav, previous, 0)

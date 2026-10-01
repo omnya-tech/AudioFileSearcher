@@ -34,5 +34,19 @@
     "no_speech_threshold": 0.6,
     "threads": 0,
     "initial_prompt": "",
-    "play_sentence_only": false
+    "play_sentence_only": true,
+    "dictionaries": {
+        "عام": {
+            "corrections": {},
+            "terms": []
+        }
+    },
+    "active_dictionary": "عام",
+    "window_geometry": {
+        "x": 208,
+        "y": 14,
+        "w": 950,
+        "h": 700,
+        "maximized": false
+    }
 }

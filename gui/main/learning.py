@@ -3,6 +3,7 @@ import wx
 
 from core.learning import LearningStore
 from core.text_corrector import TextCorrector
+from core import dictionaries
 
 # في الوضع التلقائي: لا نتعلم تصحيحاً إلا بعد تكراره، حتى لا نعمّم تصحيحاً كان صحيحاً في سياق واحد فقط
 AUTO_LEARN_MIN_COUNT = 2
@@ -42,7 +43,8 @@ class LearningMixin:
                 self.status_bar.SetStatusText(self.i18n.get("status_learned_auto", words=self._describe(learned), count=changed))
             return
 
-        dlg = wx.MessageDialog(self, self.i18n.get("msg_learn_ask", words=self._describe(pairs)),
+        dlg = wx.MessageDialog(self, self.i18n.get("msg_learn_ask", words=self._describe(pairs),
+                                                   dictionary=dictionaries.active_name(self.settings)),
                                self.i18n.get("dialog_learn_title"), wx.YES_NO | wx.CANCEL | wx.YES_DEFAULT | wx.ICON_QUESTION)
         dlg.SetYesNoCancelLabels(self.i18n.get("btn_learn_and_apply"), self.i18n.get("btn_learn_only"), self.i18n.get("btn_dont_learn"))
         answer = dlg.ShowModal()
@@ -61,11 +63,8 @@ class LearningMixin:
         return "، ".join(f"«{w}» ← «{r}»" for w, r in pairs)
 
     def _add_to_dictionary(self, pairs):
-        """التصحيحات المتعلَّمة تدخل القاموس المخصص: تُطبق في كل تفريغ قادم وتُعطى للنموذج كتلميحات"""
-        dictionary = dict(self.settings.get("custom_dictionary", {}) or {})
-        for wrong, right in pairs:
-            dictionary[wrong] = right
-        self.settings.set("custom_dictionary", dictionary)
+        """التصحيحات المتعلَّمة تدخل قاموس المجال المختار: تُطبق في كل تفريغ قادم وتُعطى للنموذج كتلميحات"""
+        dictionaries.add_corrections(self.settings, pairs)
 
     def apply_corrections(self, dictionary, skip_index=None):
         """تطبيق تصحيحات على كل جمل النتائج الحالية. ترجع عدد الجمل التي تغيّرت"""
@@ -92,7 +91,7 @@ class LearningMixin:
         """تطبيق القاموس كله على النتائج الحالية (مثلاً بعد إضافة كلمات، أو على ملف ترجمة مفتوح)"""
         if self.transcription_thread_running() or not self.all_segments:
             return
-        dictionary = self.settings.get("custom_dictionary", {}) or {}
+        dictionary = dictionaries.active_corrections(self.settings)
         if not dictionary:
             wx.MessageBox(self.i18n.get("msg_dictionary_empty"), self.i18n.get("dialog_info_title"), wx.ICON_INFORMATION)
             return

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from faster_whisper import WhisperModel
 from core.text_corrector import TextCorrector
 from core.learning import LearningStore, hotwords_for_model
+from core import dictionaries
 from core.transcription_logger import TranscriptionLogger, ErrorDetector
 from core.model_manager import ModelManager
 from core.logger import log_error
@@ -82,7 +83,9 @@ class TranscriptionThread(threading.Thread):
         self.resume_from = float(self.resume_segments[-1][3]) if self.resume_segments else 0.0
         self.i18n = i18n
         self.settings = parent.settings
-        self.corrections_dict = dict(self.settings.get("custom_dictionary", {}) or {})
+        # قاموس المجال المختار حالياً (قرآن، محاضرات...): تصحيحاته للنص، ومصطلحاته تلميحات للنموذج
+        self.corrections_dict = dictionaries.active_corrections(self.settings)
+        self.terms = dictionaries.active_terms(self.settings)
         self.corrector = TextCorrector(self.corrections_dict)
         self.logger = TranscriptionLogger(i18n)
         self.error_detector = ErrorDetector(i18n)
@@ -225,7 +228,7 @@ class TranscriptionThread(threading.Thread):
         use_hotwords = self.settings.get("use_hotwords", True)
         correction_level = self.settings.get("correction_level", "medium")
         # تلميحات للنموذج: الكلمات الصحيحة من القاموس، والأكثر تصحيحاً من المستخدم أولاً
-        dynamic_hotwords = hotwords_for_model(self.corrections_dict, LearningStore()) if enable_correction and use_hotwords else None
+        dynamic_hotwords = hotwords_for_model(self.corrections_dict, LearningStore(), terms=self.terms)             if enable_correction and use_hotwords else None
 
         transcribe_params = {
             "audio": self.audio_file,

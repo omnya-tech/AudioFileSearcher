@@ -116,12 +116,12 @@ class LearningStore:
         self.save()
 
 
-def hotwords_for_model(dictionary, store=None, limit=MAX_HOTWORDS):
+def hotwords_for_model(dictionary, store=None, limit=MAX_HOTWORDS, terms=None):
     """
-    الكلمات الصحيحة التي تُعطى للنموذج كتلميح أثناء التفريغ: الأكثر تصحيحاً أولاً ثم باقي القاموس،
-    بلا تكرار، وبحد أقصى (النموذج يقبل تلميحاً محدود الطول ويقص الزائد).
+    الكلمات الصحيحة التي تُعطى للنموذج كتلميح أثناء التفريغ: المصطلحات والأسماء التي كتبها المستخدم أولاً،
+    ثم الأكثر تصحيحاً، ثم باقي القاموس، بلا تكرار، وبحد أقصى (النموذج يقبل تلميحاً محدود الطول ويقص الزائد).
     """
-    ordered = []
+    ordered = list(terms or [])
     if store is not None:
         ordered += [e["right"] for e in store.corrections() if e.get("right") in (dictionary or {}).values()]
     ordered += list((dictionary or {}).values())

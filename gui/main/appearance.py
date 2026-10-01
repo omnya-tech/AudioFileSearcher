@@ -149,6 +149,7 @@ class AppearanceMixin:
         self.lbl_filter.SetLabel(self.i18n.get("lbl_search"))
         self.lbl_file_path.SetLabel(self.i18n.get("lbl_selected_file"))
         self.lbl_results.SetLabel(self.i18n.get("lbl_results"))
+        self.lbl_dictionary.SetLabel(self.i18n.get("lbl_dictionary"))
 
         if direction_changed:
             self._rebuild_result_list()

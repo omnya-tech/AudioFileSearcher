@@ -529,10 +529,10 @@ class SettingsDialog(wx.Dialog):
     def on_reset(self, event):
         dlg = wx.MessageDialog(self, self.i18n.get("msg_reset_confirm"), self.i18n.get("dialog_warning_title"), wx.YES_NO | wx.ICON_WARNING)
         if dlg.ShowModal() == wx.ID_YES:
-            # القاموس المخصص من بيانات المستخدم وليس إعداداً، فلا نمسحه مع الاستعادة
-            custom_dict = self.settings.get("custom_dictionary", {})
+            # القواميس من بيانات المستخدم وليست إعدادات، فلا تُمسح مع الاستعادة
+            saved = {k: self.settings.get(k) for k in ("dictionaries", "active_dictionary", "custom_dictionary")}
             self.settings.reset_to_defaults()
-            self.settings.set("custom_dictionary", custom_dict)
+            self.settings.update({k: v for k, v in saved.items() if v is not None})
             self.load_settings()
             # تطبيق المظهر واللغة الافتراضيين فوراً حتى تتطابق الواجهة مع الإعدادات المحفوظة
             if hasattr(self.parent_window, 'apply_theme'): self.parent_window.apply_theme(self.settings.get("theme", "light"))

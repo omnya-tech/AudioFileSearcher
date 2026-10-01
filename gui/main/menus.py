@@ -1,5 +1,6 @@
 """القوائم واختصاراتها، وفتح النوافذ الفرعية (الإعدادات، النماذج، القاموس، السجل...)"""
 import wx
+from core import dictionaries
 from gui.settings_dialog import SettingsDialog
 from gui.download_dialog import DownloadDialog
 from gui.about_dialog import AboutDialog
@@ -131,6 +132,17 @@ class MenusMixin:
         dlg = CustomDictDialog(self, self.i18n, self.settings)
         dlg.ShowModal()
         dlg.Destroy()
+        self.refresh_dictionary_choice()
+
+    def refresh_dictionary_choice(self):
+        names = dictionaries.names(self.settings)
+        self.cb_dictionary.Set(names)
+        self.cb_dictionary.SetStringSelection(dictionaries.active_name(self.settings))
+        self.transcription_panel.Layout()
+
+    def on_dictionary_chosen(self, event):
+        dictionaries.set_active(self.settings, self.cb_dictionary.GetStringSelection())
+        self.status_bar.SetStatusText(self.i18n.get("status_dictionary_chosen", name=self.cb_dictionary.GetStringSelection()))
 
     def shortcuts_text(self):
         """قائمة الاختصارات تُبنى من القوائم نفسها، فتبقى صحيحة لو تغيّر أي اختصار"""

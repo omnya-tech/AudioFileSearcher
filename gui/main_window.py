@@ -61,6 +61,7 @@ class MainWindow(AppearanceMixin, MenusMixin, FilesMixin, TranscriptionMixin, Re
         self.setup_menu()
         self.setup_ui()
         self.setup_accessibility()
+        self.refresh_dictionary_choice()
 
         self.apply_theme(self.settings.get("theme", "light"))
         self.apply_font_size(self.settings.get("font_size", 10))
@@ -102,8 +103,14 @@ class MainWindow(AppearanceMixin, MenusMixin, FilesMixin, TranscriptionMixin, Re
         self.btn_export = wx.Button(self.transcription_panel, label=self.i18n.get("btn_export"))
         self.btn_process.Disable()
         self.btn_export.Disable()
+        # قاموس المجال المستخدم في التفريغ (قرآن، محاضرات...): يُختار قبل البدء
+        self.lbl_dictionary = wx.StaticText(self.transcription_panel, label=self.i18n.get("lbl_dictionary"))
+        self.cb_dictionary = wx.Choice(self.transcription_panel)
+        self.cb_dictionary.Bind(wx.EVT_CHOICE, self.on_dictionary_chosen)
         btn_sizer.Add(self.btn_process, 0, wx.ALL, 5)
         btn_sizer.Add(self.btn_export, 0, wx.ALL, 5)
+        btn_sizer.Add(self.lbl_dictionary, 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, 20)
+        btn_sizer.Add(self.cb_dictionary, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
         trans_sizer.Add(btn_sizer, 0, wx.CENTER | wx.ALL, 5)
 
         filter_sizer = wx.BoxSizer(wx.HORIZONTAL)
