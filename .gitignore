@@ -1,10 +1,21 @@
-# النماذج كبيرة جداً (جيجابايتات) وتتحمل من داخل البرنامج
+# بيانات المستخدم: تُنشأ عند تشغيل البرنامج ولا تُرفع إلى المستودع
+config.json
+config.json.tmp
+learning.json
+installer_language
 models/
 logs/
 output/
-__pycache__/
-*.pyc
-config.json.tmp
+recovery/
+inbox/
+
+# ملفات البناء
 build/
 dist/
+
+# بايثون
+__pycache__/
+*.pyc
 .pytest_cache/
+.venv/
+venv/

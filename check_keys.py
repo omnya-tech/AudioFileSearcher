@@ -45,11 +45,11 @@ def analyze_json(json_path, code_keys):
         print(f" 📊 تقرير ملف: {os.path.basename(json_path)}")
         print(f"{'='*40}")
         
-        print(f"\n❌ مفاتيح ناقصة (موجودة في الكود ومش في ملف {os.path.basename(json_path)}): {len(missing_in_json)}")
+        print(f"\n❌ مفاتيح ناقصة (مستخدمة في الكود وغير موجودة في ملف {os.path.basename(json_path)}): {len(missing_in_json)}")
         for k in sorted(missing_in_json):
             print(f"   \"{k}\": \"\",")
             
-        print(f"\n⚠️ مفاتيح زائدة (موجودة في ملف {os.path.basename(json_path)} ومش مستخدمة في الكود): {len(unused_in_json)}")
+        print(f"\n⚠️ مفاتيح زائدة (موجودة في ملف {os.path.basename(json_path)} وغير مستخدمة في الكود): {len(unused_in_json)}")
         for k in sorted(unused_in_json):
             print(f"   - {k}")
             

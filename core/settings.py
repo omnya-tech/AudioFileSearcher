@@ -1,7 +1,10 @@
 import os
 import json
 
-from core.paths import CONFIG_FILE, ensure_dir
+from core.paths import APP_DIR, CONFIG_FILE, ensure_dir
+
+# يكتبه مثبت Inno Setup في مجلد البرنامج (انظر installer/AudioTranscriber.iss)
+INSTALLER_LANGUAGE_FILE = "installer_language"
 
 class SettingsManager:
     def __init__(self, config_file=None):
@@ -46,7 +49,7 @@ class SettingsManager:
     def load(self):
         if os.path.exists(self.config_file):
             try:
-                with open(self.config_file, 'r', encoding='utf-8') as f:
+                with open(self.config_file, 'r', encoding='utf-8-sig') as f:  # يقبل الملف لو حُفظ بمحرر يضيف BOM
                     data = json.load(f)
                     if isinstance(data, dict):
                         self.settings.update(data)
@@ -75,6 +78,21 @@ class SettingsManager:
         """تعديل عدة إعدادات معاً مع حفظ الملف مرة واحدة فقط"""
         self.settings.update(values)
         self.save()
+
+    def apply_installer_language(self):
+        """
+        المثبت يكتب اللغة التي اختارها المستخدم في ملف بجانب البرنامج، فيظهر البرنامج بلغة المثبت.
+        تُطبَّق مرة واحدة بعد كل تثبيت (بصمة الملف محفوظة)، فلا تُلغي تغيير المستخدم للغة لاحقاً من الإعدادات.
+        """
+        path = os.path.join(APP_DIR, INSTALLER_LANGUAGE_FILE)
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                lang = f.read().strip().lower()
+            stamp = f"{lang}:{os.path.getmtime(path)}"
+        except OSError:
+            return
+        if lang in ("ar", "en") and self.get("installer_language_stamp") != stamp:
+            self.update({"language": lang, "installer_language_stamp": stamp})
 
     def reset_to_defaults(self):
         self.settings = self._get_defaults()

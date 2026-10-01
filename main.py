@@ -44,7 +44,12 @@ class TranscriptionApp(wx.App):
             return False
         single_instance.clear_inbox()
 
+        # اسم ثابت يراه المثبت وبرنامج الإزالة (AppMutex)، فيطلبان إغلاق البرنامج قبل استبدال ملفاته
+        self.running_mutexes = [ctypes.windll.kernel32.CreateMutexW(None, False, name)
+                                for name in ("AudioTranscriber.Running", "Global\\AudioTranscriber.Running")]
+
         self.settings = SettingsManager()
+        self.settings.apply_installer_language()
         if self.settings.get("theme", "light") == "dark":
             # المظهر الداكن الأصلي في ويندوز: يشمل كل النوافذ والقوائم وخانات الاختيار وشريط العنوان.
             # يجب تفعيله قبل إنشاء أي نافذة، لذلك تغيير المظهر يكتمل بعد إعادة تشغيل البرنامج

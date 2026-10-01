@@ -90,6 +90,37 @@ def test_settings(tmp_path):
     assert SettingsManager(str(cfg)).get("theme") == "light"   # ملف تالف => الافتراضي
     assert SettingsManager().config_file == os.path.join(BASE_DIR, "config.json")
 
+    cfg.write_text('{"theme": "dark"}', encoding="utf-8-sig")
+    assert SettingsManager(str(cfg)).get("theme") == "dark"    # ملف محفوظ بـ BOM
+
+
+def test_installer_language(tmp_path, monkeypatch):
+    import core.settings as settings_module
+    monkeypatch.setattr(settings_module, "APP_DIR", str(tmp_path))
+    marker = tmp_path / settings_module.INSTALLER_LANGUAGE_FILE
+    cfg = str(tmp_path / "config.json")
+
+    s = SettingsManager(cfg)
+    s.apply_installer_language()                # لا يوجد ملف من المثبت: لا تغيير
+    assert s.get("language") == "ar"
+
+    marker.write_text("en", encoding="ascii")    # المستخدم اختار الإنجليزية في المثبت
+    s.apply_installer_language()
+    assert SettingsManager(cfg).get("language") == "en"
+
+    s.set("language", "ar")                      # ثم غيّر اللغة من الإعدادات: يبقى اختياره
+    s.apply_installer_language()
+    assert s.get("language") == "ar"
+
+    marker.write_text("en", encoding="ascii")    # تثبيت جديد بالإنجليزية يطبَّق مرة أخرى
+    os.utime(marker, (1, 1))
+    s.apply_installer_language()
+    assert s.get("language") == "en"
+
+    marker.write_text("xx", encoding="ascii")    # قيمة غير معروفة: تُتجاهل
+    s.apply_installer_language()
+    assert s.get("language") == "en"
+
 
 def test_locales_have_same_keys():
     base = os.path.join(BASE_DIR, "locales")
