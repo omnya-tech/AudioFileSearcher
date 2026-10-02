@@ -33,8 +33,7 @@
 
 يظهر البرنامج في قائمة ابدأ باسم «Media Searcher».
 
-> **ملاحظة:** عملية التثبيت العادية لا تتطلب صلاحيات المسؤول. إذا أردت تثبيت البرنامج لجميع المستخدمين على الجهاز، استخدم الأمر التالي:
-> `MediaSearcher-Setup-<الإصدار>.exe /ALLUSERS`
+> **ملاحظة:** يُثبَّت البرنامج في Program Files، فيطلب ويندوز موافقة المسؤول أثناء التثبيت. أما بياناتك (الإعدادات والقواميس والنماذج المحمّلة) فتُحفظ في مجلد حسابك `%APPDATA%\MediaSearcher`.
 
 دليل الاستخدام الشامل متوفر داخل البرنامج (بالضغط على زر `F1`)، أو من خلال مجلد [docs](docs/guide_ar.md).
 
@@ -108,7 +107,7 @@ It is designed to be fully usable from the keyboard and with screen readers such
 
 The program appears in the Start menu as "Media Searcher".
 
-No administrator rights are needed. To install for all users: `MediaSearcher-Setup-<version>.exe /ALLUSERS`.
+The program installs into Program Files, so Windows asks for administrator approval during setup. Your data (settings, dictionaries, downloaded models) is stored in your account folder `%APPDATA%\MediaSearcher`.
 
 The full user guide is inside the program (F1) and in the [docs](docs/guide_en.md) folder.
 

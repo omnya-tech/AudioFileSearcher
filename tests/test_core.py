@@ -199,6 +199,48 @@ def test_legacy_appdata_folder_is_moved(tmp_path, monkeypatch):
         shutil.rmtree(legacy)
 
 
+def test_installed_build_keeps_data_in_roaming(tmp_path, monkeypatch):
+    """النسخة المثبتة (exe) تحفظ بياناتها في %APPDATA% دائماً، حتى لو كان مجلد البرنامج قابلاً للكتابة"""
+    import importlib
+    import sys
+    from core import paths
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    monkeypatch.delenv("MEDIA_SEARCHER_DATA_DIR", raising=False)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(tmp_path / "Program Files" / "MediaSearcher" / "MediaSearcher.exe"))
+    try:
+        reloaded = importlib.reload(paths)
+        assert reloaded.DATA_DIR == str(tmp_path / "Roaming" / "MediaSearcher")
+        assert reloaded.MODELS_DIR.startswith(reloaded.DATA_DIR) and reloaded.CONFIG_FILE.startswith(reloaded.DATA_DIR)
+    finally:
+        monkeypatch.undo()
+        importlib.reload(paths)
+
+
+def test_old_install_data_moves_to_roaming(tmp_path, monkeypatch):
+    """بيانات التثبيت القديم للمستخدم (بجانب البرنامج في مجلد Programs داخل LOCALAPPDATA) تُنقل لمجلد المستخدم دون استبدال الموجود"""
+    from core import paths
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    old = tmp_path / "Local" / "Programs" / "AudioFileSearcher"
+    (old / "models" / "turbo").mkdir(parents=True)
+    (old / "models" / "turbo" / "model.bin").write_bytes(b"x")
+    (old / "config.json").write_text('{"language": "en"}', encoding="utf-8")
+    (old / "learning.json").write_text("old", encoding="utf-8")
+    (old / "MediaSearcher.exe").write_bytes(b"exe")
+    target = tmp_path / "Roaming" / "MediaSearcher"
+    target.mkdir(parents=True)
+    (target / "learning.json").write_text("new", encoding="utf-8")
+
+    assert paths._user_data_dir() == str(target)
+    assert (target / "models" / "turbo" / "model.bin").exists() and not (old / "models").exists()
+    assert (target / "config.json").read_text(encoding="utf-8") == '{"language": "en"}'
+    # الموجود في المجلد الجديد لا يُستبدل، والبرنامج نفسه لا يُنقل
+    assert (target / "learning.json").read_text(encoding="utf-8") == "new" and (old / "learning.json").exists()
+    assert not (target / "MediaSearcher.exe").exists()
+
+
 def test_legacy_dictionary_file_imports(tmp_path):
     from core import dictionaries
     path = tmp_path / "old.json"

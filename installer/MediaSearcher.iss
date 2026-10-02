@@ -14,12 +14,14 @@
 ; مهما كانت لغة المثبت: لغة الواجهة تتغير من الإعدادات، والاسم الذي يكتبه المثبت لا يتغير معها
 #define AppName "Media Searcher"
 #define AppPublisher "Omnya Software"
+; معرّف البرنامج بلا أقواس: يُستخدم في AppId وفي البحث عن التثبيتات السابقة في الريجستري
+#define AppGuid "9D0DC9B3-FF25-4F8C-903D-774923EB1FE2"
 #define ProgId "MediaSearcher.AudioFile"
 
 [Setup]
 ; معرّف ثابت: لا تغيّره أبداً، وإلا يُعامَل كل إصدار جديد كبرنامج مختلف.
 ; (بقي كما هو بعد تغيير الاسم التقني من AudioTranscriber ثم AudioFileSearcher، فيُحدَّث التثبيت القديم في مكانه ببياناته ونماذجه)
-AppId={{9D0DC9B3-FF25-4F8C-903D-774923EB1FE2}
+AppId={{{#AppGuid}}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
@@ -31,11 +33,9 @@ VersionInfoCompany={#AppPublisher}
 UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 
-; التثبيت للمستخدم الحالي دون صلاحيات المسؤول (%LOCALAPPDATA%\Programs).
-; التثبيت لكل المستخدمين في Program Files من سطر الأوامر:  MediaSearcher-Setup.exe /ALLUSERS
-; (لا تُعرض نافذة الاختيار لأنها تظهر قبل اختيار اللغة، فلا تعرف اسم البرنامج المترجم)
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=commandline
+; البرنامج في Program Files (يحتاج موافقة المسؤول)، وبيانات كل مستخدم في مجلده %APPDATA%\MediaSearcher
+; (الإعدادات والقواميس والنماذج والسجلات): انظر core/paths.py
+PrivilegesRequired=admin
 DefaultDirName={autopf}\MediaSearcher
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
@@ -140,9 +140,28 @@ Type: files; Name: "{app}\installer_language"
 var
   DeleteUserData: Boolean;
 
+{ الإصدارات السابقة كانت تُثبَّت للمستخدم الحالي فقط (%LOCALAPPDATA%\Programs، وسجلها في HKCU).
+  نزيلها بصمت قبل التثبيت حتى لا يظهر البرنامج مرتين. برنامج الإزالة القديم في الوضع الصامت لا يحذف بيانات المستخدم
+  (سؤال الحذف إجابته الافتراضية «لا»)، والبرنامج الجديد ينقل تلك البيانات إلى %APPDATA%\MediaSearcher عند أول تشغيل }
+procedure RemovePerUserInstall();
+var
+  Uninstaller: String;
+  ResultCode: Integer;
+begin
+  if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#AppGuid}}_is1',
+                         'UninstallString', Uninstaller) then
+  begin
+    Uninstaller := RemoveQuotes(Uninstaller);
+    if FileExists(Uninstaller) then
+      Exec(Uninstaller, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;
+
 { ربط المثبت بالبرنامج: اللغة المختارة في المثبت تصبح لغة البرنامج (يقرؤها SettingsManager.apply_installer_language) }
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  if CurStep = ssInstall then
+    RemovePerUserInstall();
   if CurStep = ssPostInstall then
     SaveStringToFile(ExpandConstant('{app}\installer_language'), ActiveLanguage, False);
 end;
@@ -158,7 +177,7 @@ begin
   DeleteFile(Dir + '\learning.json');
 end;
 
-{ البيانات تكون بجانب البرنامج (تثبيت للمستخدم الحالي)، أو في %APPDATA% (تثبيت لكل المستخدمين).
+{ البيانات في %APPDATA%\MediaSearcher (والإصدارات القديمة كانت تحفظها بجانب البرنامج أو في %APPDATA% بأسمائها القديمة).
   تُحذف عناصرها المعروفة فقط، لا المجلد كله، حتى لا يُحذف شيء آخر لو ثُبّت البرنامج في مجلد مشترك }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin

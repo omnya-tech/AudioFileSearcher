@@ -2,8 +2,9 @@
 مسارات البرنامج في مكان واحد.
 - APP_DIR: مجلد البرنامج نفسه (قد يكون للقراءة فقط، مثل Program Files).
 - RESOURCE_DIR: الملفات المضمَّنة مع البرنامج (ملفات اللغة). في نسخة exe هي مجلد _internal.
-- DATA_DIR: مكان الإعدادات والسجلات والنماذج المحمّلة. يكون بجانب البرنامج لو المجلد قابل للكتابة
-  (نسخة محمولة أو التشغيل من الكود)، وإلا في مجلد المستخدم: %APPDATA%\\MediaSearcher.
+- DATA_DIR: مكان الإعدادات والقواميس والسجلات والنماذج المحمّلة.
+  في النسخة المثبتة (exe): دائماً في مجلد المستخدم %APPDATA%\\MediaSearcher، والبرنامج نفسه في Program Files.
+  عند التشغيل من الكود: بجانب الكود لو كان المجلد قابلاً للكتابة، وإلا في مجلد المستخدم.
 """
 import os
 import sys
@@ -12,6 +13,8 @@ import tempfile
 APP_NAME = "MediaSearcher"
 # الأسماء التقنية السابقة، الأحدث أولاً (تُنقل بياناتها للاسم الحالي تلقائياً)
 LEGACY_APP_NAMES = ("AudioFileSearcher", "AudioTranscriber")
+# بيانات البرنامج التي تُنقل من مجلد التثبيت القديم (الإصدارات التي كانت تُثبَّت للمستخدم وتحفظ بياناتها بجانبها)
+DATA_ITEMS = ("config.json", "learning.json", "models", "logs", "recovery")
 
 if getattr(sys, "frozen", False):
     APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
@@ -33,6 +36,31 @@ def is_writable_dir(path):
         return False
 
 
+def _old_install_dirs():
+    """مجلدات التثبيت للمستخدم في الإصدارات السابقة (%LOCALAPPDATA%\\Programs\\<الاسم>)"""
+    base = os.environ.get("LOCALAPPDATA")
+    if not base:
+        return []
+    return [os.path.join(base, "Programs", name) for name in (APP_NAME,) + LEGACY_APP_NAMES]
+
+
+def _move_old_install_data(path):
+    """
+    نقل بيانات التثبيت القديم (بجانب البرنامج) إلى مجلد المستخدم. كل عنصر يُنقل مرة واحدة ولا يُستبدل
+    عنصر موجود، فلو انقطع النقل في المنتصف يكمل في التشغيل التالي.
+    """
+    import shutil
+    for old in _old_install_dirs():
+        for item in DATA_ITEMS:
+            source, target = os.path.join(old, item), os.path.join(path, item)
+            if os.path.exists(source) and not os.path.exists(target):
+                try:
+                    os.makedirs(path, exist_ok=True)
+                    shutil.move(source, target)
+                except OSError:
+                    pass
+
+
 def _user_data_dir():
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
     path = os.path.join(base, APP_NAME)
@@ -44,12 +72,14 @@ def _user_data_dir():
                 os.rename(legacy, path)
             except OSError:
                 return legacy
+    _move_old_install_data(path)
     return path
 
 
 # متغير البيئة يسمح بتشغيل البرنامج ببيانات منفصلة (للتجربة والاختبارات) دون لمس إعدادات المستخدم
 DATA_DIR = (os.environ.get("MEDIA_SEARCHER_DATA_DIR")
-            or (APP_DIR if is_writable_dir(APP_DIR) else _user_data_dir()))
+            or (_user_data_dir() if getattr(sys, "frozen", False)
+                else APP_DIR if is_writable_dir(APP_DIR) else _user_data_dir()))
 
 LOCALES_DIR = os.path.join(RESOURCE_DIR, "locales")
 MODELS_DIR = os.path.join(DATA_DIR, "models")
