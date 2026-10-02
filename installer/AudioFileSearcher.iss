@@ -9,6 +9,9 @@
 #define AppExe "AudioFileSearcher.exe"
 ; الاسم التقني قبل الإصدار الذي غيّره: يُحذف ما بقي منه عند التحديث
 #define LegacyName "AudioTranscriber"
+; اسم البرنامج في ويندوز (قائمة ابدأ، وسطح المكتب، والتطبيقات المثبتة، و«فتح باستخدام») ثابت بالإنجليزية
+; مهما كانت لغة المثبت: لغة الواجهة تتغير من الإعدادات، والاسم الذي يكتبه المثبت لا يتغير معها
+#define AppName "Audio File Searcher"
 #define AppPublisher "Omnya Software"
 #define ProgId "AudioFileSearcher.AudioFile"
 
@@ -16,7 +19,7 @@
 ; معرّف ثابت: لا تغيّره أبداً، وإلا يُعامَل كل إصدار جديد كبرنامج مختلف.
 ; (بقي كما هو بعد تغيير الاسم التقني من AudioTranscriber، فيُحدَّث التثبيت القديم في مكانه ببياناته ونماذجه)
 AppId={{9D0DC9B3-FF25-4F8C-903D-774923EB1FE2}
-AppName={cm:AppName}
+AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 AppCopyright=Copyright © 2026 محمد شعراوي, Omnya Software Team
@@ -24,7 +27,7 @@ VersionInfoVersion={#AppVersion}
 VersionInfoProductName=Audio File Searcher
 VersionInfoDescription=Audio File Searcher Setup
 VersionInfoCompany={#AppPublisher}
-UninstallDisplayName={cm:AppName}
+UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 
 ; التثبيت للمستخدم الحالي دون صلاحيات المسؤول (%LOCALAPPDATA%\Programs).
@@ -64,8 +67,6 @@ Name: "en"; MessagesFile: "compiler:Default.isl"; LicenseFile: "..\build\license
 en.SelectLanguageLabel=Select the language to use during the installation. The program will use the same language.
 
 [CustomMessages]
-ar.AppName=الباحث الصوتي في الملفات
-en.AppName=Audio File Searcher
 ar.TaskIntegration=التكامل مع ويندوز:
 en.TaskIntegration=Windows integration:
 ar.TaskOpenWith=إضافة البرنامج إلى قائمة «فتح باستخدام» للملفات الصوتية
@@ -82,7 +83,7 @@ Name: "openwith"; Description: "{cm:TaskOpenWith}"; GroupDescription: "{cm:TaskI
 [InstallDelete]
 ; عند التحديث: حذف ملفات الإصدار السابق فقط حتى لا تختلط بالجديدة. بيانات المستخدم خارج هذا المجلد فتبقى كما هي
 Type: filesandordirs; Name: "{app}\_internal"
-; اسم الاختصار يتبع لغة المثبت: إذا أعيد التثبيت بلغة أخرى، يُحذف اختصار اللغة السابقة
+; اختصارات الإصدارات السابقة: كان اسمها يتبع لغة المثبت، والآن بالإنجليزية دائماً
 Type: files; Name: "{autoprograms}\الباحث الصوتي في الملفات.lnk"
 Type: files; Name: "{autoprograms}\Audio File Searcher.lnk"
 Type: files; Name: "{autodesktop}\الباحث الصوتي في الملفات.lnk"
@@ -96,15 +97,15 @@ Source: "..\dist\AudioFileSearcher\*"; DestDir: "{app}"; Flags: ignoreversion re
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{cm:AppName}"; Filename: "{app}\{#AppExe}"; Comment: "{cm:AppName}"
-Name: "{autodesktop}\{cm:AppName}"; Filename: "{app}\{#AppExe}"; Comment: "{cm:AppName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; Comment: "{#AppName}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Comment: "{#AppName}"; Tasks: desktopicon
 
 [Registry]
 ; «فتح باستخدام»: نوع ملف خاص بالبرنامج يُضاف إلى قائمة البرامج المقترحة لكل صيغة، دون تغيير البرنامج الافتراضي للمستخدم
 Root: HKA; Subkey: "Software\Classes\{#ProgId}"; ValueType: string; ValueData: "{cm:AudioFileType}"; Flags: uninsdeletekey; Tasks: openwith
 Root: HKA; Subkey: "Software\Classes\{#ProgId}\DefaultIcon"; ValueType: string; ValueData: "{app}\{#AppExe},0"; Tasks: openwith
 Root: HKA; Subkey: "Software\Classes\{#ProgId}\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: openwith
-Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{cm:AppName}"; Flags: uninsdeletekey; Tasks: openwith
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#AppName}"; Flags: uninsdeletekey; Tasks: openwith
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command"; ValueType: string; ValueData: """{app}\{#AppExe}"" ""%1"""; Tasks: openwith
 ; «فتح باستخدام» بالاسم القديم: يُحذف عند التحديث حتى لا يظهر البرنامج مرتين في القائمة
 Root: HKA; Subkey: "Software\Classes\{#LegacyName}.AudioFile"; ValueType: none; Flags: deletekey dontcreatekey
@@ -123,7 +124,7 @@ Root: HKA; Subkey: "Software\Classes\Applications\{#LegacyName}.exe"; ValueType:
 #emit AddAudioType(".opus")
 
 [Run]
-Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{cm:AppName}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 Type: files; Name: "{app}\installer_language"
