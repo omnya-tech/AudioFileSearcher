@@ -2,7 +2,7 @@
 
 # الباحث في الوسائط 🎙️
 
-**فرّغ تسجيلاتك الصوتية وابحث فيها.**
+**فرّغ ملفاتك الصوتية وابحث فيها، دون إنترنت، ويعمل مع قارئات الشاشة.**
 
 برنامج مخصص لنظام ويندوز يحوّل التسجيلات الصوتية إلى نصوص مكتوبة بدقة عالية باستخدام نموذج Whisper. يعمل البرنامج محلياً بالكامل على جهازك للحفاظ على خصوصيتك، دون إرسال أي بيانات إلى الإنترنت.
 
@@ -84,7 +84,7 @@ python -m pytest
 
 # Media Searcher 🎙️
 
-**Transcribe and search your audio recordings.**
+**Transcribe and search your audio files, offline, screen-reader friendly.**
 
 A Windows program that turns audio recordings into written text with Whisper. It runs entirely on your computer and never sends recordings to the internet.
 It is designed to be fully usable from the keyboard and with screen readers such as NVDA, with an Arabic and English interface.
