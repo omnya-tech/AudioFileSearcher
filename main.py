@@ -21,11 +21,8 @@ except (AttributeError, OSError):
             pass
 
 # تسجيل أي انهيار منخفض المستوى (في مكتبات الصوت أو النموذج) حتى لو لم يترك خطأ بايثون
-import faulthandler
-try:
-    faulthandler.enable(open(os.path.join(LOGS_DIR, "crash.log"), "a", encoding="utf-8"))
-except OSError:
-    pass
+from core import crash_log
+crash_log.install(os.path.join(LOGS_DIR, "crash.log"))
 
 import wx
 from core.i18n import LocalizationManager

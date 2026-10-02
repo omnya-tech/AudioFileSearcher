@@ -397,3 +397,48 @@ def test_dictionary_import_export_formats(tmp_path):
 def test_terms_go_to_model_first():
     from core.learning import hotwords_for_model
     assert hotwords_for_model({"سراط": "صراط"}, None, terms=["تشارلز باباج"]).split(", ") == ["تشارلز باباج", "صراط"]
+
+
+CRASH_SCRIPT = r'''
+import ctypes, sys, time
+sys.path.insert(0, {root!r})
+mode, log = sys.argv[1], sys.argv[2]
+if mode == "old":
+    import faulthandler
+    faulthandler.enable(open(log, "a"))
+else:
+    from core import crash_log
+    crash_log.install(log)
+# استثناء ويندوز يُعالَج (ctypes يحوّله لخطأ بايثون)، مثل استثناءات COM التي كانت تملأ الملف
+try:
+    ctypes.windll.kernel32.RaiseException(0x80010108, 0, 0, None)
+except OSError:
+    pass
+if mode == "crash":
+    # انهيار حقيقي: استثناء لا يعالجه أحد في خيط ويندوز
+    k = ctypes.windll.kernel32
+    k.CreateThread.restype = ctypes.c_void_p
+    k.CreateThread.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_void_p]
+    k.CreateThread(None, 0, ctypes.cast(k.RaiseException, ctypes.c_void_p), ctypes.c_void_p(0xC0000005), 0, None)
+    time.sleep(10)
+'''
+
+
+@pytest.mark.parametrize("mode", ["old", "handled", "crash"])
+def test_crash_log_records_only_real_crashes(tmp_path, mode):
+    import subprocess
+    import sys
+    script = tmp_path / "crash.py"
+    script.write_text(CRASH_SCRIPT.format(root=BASE_DIR), encoding="utf-8")
+    log = tmp_path / "crash.log"
+    proc = subprocess.run([sys.executable, str(script), mode, str(log)], timeout=60, capture_output=True)
+    text = log.read_text(encoding="utf-8", errors="replace") if log.exists() else ""
+    if mode == "old":
+        # الطريقة القديمة كانت تسجّل الاستثناء المعالَج كأنه انهيار
+        assert "0x80010108" in text
+    elif mode == "handled":
+        assert proc.returncode == 0 and text == ""
+    else:
+        assert proc.returncode != 0
+        assert "Unhandled exception 0xC0000005" in text and "0x80010108" not in text
+        assert "crash.py" in text   # مكان كود بايثون في الخيط الرئيسي
