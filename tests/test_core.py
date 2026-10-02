@@ -170,7 +170,7 @@ def test_read_only_program_folder_falls_back(tmp_path, monkeypatch):
     import importlib
     reloaded = importlib.reload(paths)
     try:
-        assert reloaded.DATA_DIR == str(tmp_path / "AudioFileSearcher")
+        assert reloaded.DATA_DIR == str(tmp_path / "MediaSearcher")
         assert reloaded.CONFIG_FILE.startswith(reloaded.DATA_DIR)
         assert reloaded.ensure_dir(reloaded.LOGS_DIR)
         # مجلد نماذج بجانب البرنامج يبقى ضمن أماكن البحث
@@ -181,17 +181,22 @@ def test_read_only_program_folder_falls_back(tmp_path, monkeypatch):
 
 
 def test_legacy_appdata_folder_is_moved(tmp_path, monkeypatch):
-    """بيانات AudioTranscriber في %APPDATA% (الاسم التقني القديم) تُنقل للاسم الجديد بإعداداتها"""
+    """بيانات %APPDATA% بالأسماء التقنية القديمة تُنقل للاسم الحالي بإعداداتها"""
     from core import paths
-    legacy = tmp_path / "AudioTranscriber"
-    legacy.mkdir()
-    (legacy / "config.json").write_text("{}", encoding="utf-8")
     monkeypatch.setenv("APPDATA", str(tmp_path))
-    assert paths._user_data_dir() == str(tmp_path / "AudioFileSearcher")
-    assert (tmp_path / "AudioFileSearcher" / "config.json").exists() and not legacy.exists()
-    # لو وُجد المجلد الجديد لا نلمس القديم
-    legacy.mkdir()
-    assert paths._user_data_dir() == str(tmp_path / "AudioFileSearcher") and legacy.exists()
+    current = tmp_path / "MediaSearcher"
+    for name in ("AudioTranscriber", "AudioFileSearcher"):
+        legacy = tmp_path / name
+        legacy.mkdir()
+        (legacy / "config.json").write_text(name, encoding="utf-8")
+        assert paths._user_data_dir() == str(current)
+        assert (current / "config.json").read_text(encoding="utf-8") == name and not legacy.exists()
+        # لو وُجد المجلد الحالي لا نلمس القديم
+        legacy.mkdir()
+        assert paths._user_data_dir() == str(current) and legacy.exists()
+        import shutil
+        shutil.rmtree(current)
+        shutil.rmtree(legacy)
 
 
 def test_legacy_dictionary_file_imports(tmp_path):

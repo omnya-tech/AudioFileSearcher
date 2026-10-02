@@ -12,9 +12,9 @@ import csv
 import json
 import os
 
-FILE_FORMAT = "audio-file-searcher-dictionary"
+FILE_FORMAT = "media-searcher-dictionary"
 # ملفات صدّرتها الإصدارات السابقة تُستورد كما هي
-LEGACY_FILE_FORMATS = ("audio-transcriber-dictionary",)
+LEGACY_FILE_FORMATS = ("audio-file-searcher-dictionary", "audio-transcriber-dictionary")
 FILE_VERSION = 1
 DEFAULT_NAMES = {"ar": "عام", "en": "General"}
 

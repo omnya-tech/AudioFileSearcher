@@ -1,12 +1,12 @@
-# Audio File Searcher – User Guide
+# Media Searcher – User Guide
 
 A program that turns audio recordings into written text. It runs entirely on your computer and never sends recordings to the internet.
 It is designed to be fully usable from the keyboard and with a screen reader (such as NVDA).
 
 ## Installing and starting
 
-- Run the installer (`AudioFileSearcher-Setup-1.0.0.exe`, for example) and choose the setup language. The language you choose also becomes the program's language; you can change it later in Settings.
-- The program installs into your user account (no administrator rights needed) and is added to the Start menu as "Audio File Searcher" (always in English, whatever the program's language). You can also choose to add a desktop shortcut.
+- Run the installer (`MediaSearcher-Setup-1.0.0.exe`, for example) and choose the setup language. The language you choose also becomes the program's language; you can change it later in Settings.
+- The program installs into your user account (no administrator rights needed) and is added to the Start menu as "Media Searcher" (always in English, whatever the program's language). You can also choose to add a desktop shortcut.
 - When you install a newer version over an older one, your settings, dictionaries and models are kept.
 - To remove the program: Windows Settings > Apps. The uninstaller asks whether to delete your data or keep it.
 - You can also open any audio file with the program (right-click the file > Open with); transcription starts immediately.

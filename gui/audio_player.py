@@ -261,7 +261,7 @@ class AudioPlayerPanel(wx.Panel):
 
     @staticmethod
     def _cache_dir():
-        d = os.path.join(tempfile.gettempdir(), "audio_file_searcher_playback")
+        d = os.path.join(tempfile.gettempdir(), "media_searcher_playback")
         os.makedirs(d, exist_ok=True)
         return d
 
@@ -273,4 +273,4 @@ class AudioPlayerPanel(wx.Panel):
         except Exception:
             pass
         # حذف النسخ المؤقتة التي أنشأها البرنامج للتشغيل
-        shutil.rmtree(os.path.join(tempfile.gettempdir(), "audio_file_searcher_playback"), ignore_errors=True)
+        shutil.rmtree(os.path.join(tempfile.gettempdir(), "media_searcher_playback"), ignore_errors=True)

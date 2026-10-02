@@ -1,41 +1,42 @@
-﻿; مثبت «الباحث الصوتي في الملفات» (Inno Setup 7)
+﻿; مثبت «الباحث في الوسائط» (Inno Setup 7)
 ; يُبنى تلقائياً من build.ps1 بعد بناء نسخة exe، أو يدوياً:
-;   ISCC.exe /DAppVersion=1.0.0 installer\AudioFileSearcher.iss
-; يحتاج: dist\AudioFileSearcher (من PyInstaller)، وملفي الرخصة build\license_ar.txt و build\license_en.txt (من build.ps1)
+;   ISCC.exe /DAppVersion=1.0.0 installer\MediaSearcher.iss
+; يحتاج: dist\MediaSearcher (من PyInstaller)، وملفي الرخصة build\license_ar.txt و build\license_en.txt (من build.ps1)
 
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
-#define AppExe "AudioFileSearcher.exe"
-; الاسم التقني قبل الإصدار الذي غيّره: يُحذف ما بقي منه عند التحديث
+#define AppExe "MediaSearcher.exe"
+; الأسماء التقنية السابقة: يُحذف ما بقي منها عند التحديث
 #define LegacyName "AudioTranscriber"
+#define LegacyName2 "AudioFileSearcher"
 ; اسم البرنامج في ويندوز (قائمة ابدأ، وسطح المكتب، والتطبيقات المثبتة، و«فتح باستخدام») ثابت بالإنجليزية
 ; مهما كانت لغة المثبت: لغة الواجهة تتغير من الإعدادات، والاسم الذي يكتبه المثبت لا يتغير معها
-#define AppName "Audio File Searcher"
+#define AppName "Media Searcher"
 #define AppPublisher "Omnya Software"
-#define ProgId "AudioFileSearcher.AudioFile"
+#define ProgId "MediaSearcher.AudioFile"
 
 [Setup]
 ; معرّف ثابت: لا تغيّره أبداً، وإلا يُعامَل كل إصدار جديد كبرنامج مختلف.
-; (بقي كما هو بعد تغيير الاسم التقني من AudioTranscriber، فيُحدَّث التثبيت القديم في مكانه ببياناته ونماذجه)
+; (بقي كما هو بعد تغيير الاسم التقني من AudioTranscriber ثم AudioFileSearcher، فيُحدَّث التثبيت القديم في مكانه ببياناته ونماذجه)
 AppId={{9D0DC9B3-FF25-4F8C-903D-774923EB1FE2}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 AppCopyright=Copyright © 2026 محمد شعراوي, Omnya Software Team
 VersionInfoVersion={#AppVersion}
-VersionInfoProductName=Audio File Searcher
-VersionInfoDescription=Audio File Searcher Setup
+VersionInfoProductName={#AppName}
+VersionInfoDescription={#AppName} Setup
 VersionInfoCompany={#AppPublisher}
 UninstallDisplayName={#AppName}
 UninstallDisplayIcon={app}\{#AppExe}
 
 ; التثبيت للمستخدم الحالي دون صلاحيات المسؤول (%LOCALAPPDATA%\Programs).
-; التثبيت لكل المستخدمين في Program Files من سطر الأوامر:  AudioFileSearcher-Setup.exe /ALLUSERS
+; التثبيت لكل المستخدمين في Program Files من سطر الأوامر:  MediaSearcher-Setup.exe /ALLUSERS
 ; (لا تُعرض نافذة الاختيار لأنها تظهر قبل اختيار اللغة، فلا تعرف اسم البرنامج المترجم)
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
-DefaultDirName={autopf}\AudioFileSearcher
+DefaultDirName={autopf}\MediaSearcher
 DisableProgramGroupPage=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -43,7 +44,7 @@ MinVersion=10.0
 
 ; البرنامج مفتوح: يطلب المثبت وبرنامج الإزالة إغلاقه أولاً (الاسم نفسه في main.py)
 ; والاسمان القديمان: الإصدار السابق المفتوح يُطلب إغلاقه أيضاً
-AppMutex=AudioFileSearcher.Running,Global\AudioFileSearcher.Running,{#LegacyName}.Running,Global\{#LegacyName}.Running
+AppMutex=MediaSearcher.Running,Global\MediaSearcher.Running,{#LegacyName}.Running,Global\{#LegacyName}.Running,{#LegacyName2}.Running,Global\{#LegacyName2}.Running
 CloseApplications=yes
 RestartApplications=no
 ChangesAssociations=yes
@@ -53,7 +54,7 @@ LanguageDetectionMethod=uilanguage
 WizardStyle=modern
 SetupIconFile=..\assets\app.ico
 OutputDir=..\dist
-OutputBaseFilename=AudioFileSearcher-Setup-{#AppVersion}
+OutputBaseFilename=MediaSearcher-Setup-{#AppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
 LZMAUseSeparateProcess=yes
@@ -88,11 +89,14 @@ Type: files; Name: "{autoprograms}\الباحث الصوتي في الملفات
 Type: files; Name: "{autoprograms}\Audio File Searcher.lnk"
 Type: files; Name: "{autodesktop}\الباحث الصوتي في الملفات.lnk"
 Type: files; Name: "{autodesktop}\Audio File Searcher.lnk"
-; البرنامج بالاسم التقني القديم (يُحدَّث التثبيت القديم في مكانه)
+Type: files; Name: "{autoprograms}\{#AppName}.lnk"
+Type: files; Name: "{autodesktop}\{#AppName}.lnk"
+; البرنامج بالأسماء التقنية القديمة (يُحدَّث التثبيت القديم في مكانه)
 Type: files; Name: "{app}\{#LegacyName}.exe"
+Type: files; Name: "{app}\{#LegacyName2}.exe"
 
 [Files]
-Source: "..\dist\AudioFileSearcher\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; \
+Source: "..\dist\MediaSearcher\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; \
     Excludes: "config.json,config.json.tmp,learning.json,\models,\logs,\recovery,\inbox,installer_language"
 Source: "..\LICENSE"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
 
@@ -110,10 +114,13 @@ Root: HKA; Subkey: "Software\Classes\Applications\{#AppExe}\shell\open\command";
 ; «فتح باستخدام» بالاسم القديم: يُحذف عند التحديث حتى لا يظهر البرنامج مرتين في القائمة
 Root: HKA; Subkey: "Software\Classes\{#LegacyName}.AudioFile"; ValueType: none; Flags: deletekey dontcreatekey
 Root: HKA; Subkey: "Software\Classes\Applications\{#LegacyName}.exe"; ValueType: none; Flags: deletekey dontcreatekey
+Root: HKA; Subkey: "Software\Classes\{#LegacyName2}.AudioFile"; ValueType: none; Flags: deletekey dontcreatekey
+Root: HKA; Subkey: "Software\Classes\Applications\{#LegacyName2}.exe"; ValueType: none; Flags: deletekey dontcreatekey
 #define AddAudioType(Ext) \
   "Root: HKA; Subkey: ""Software\Classes\" + Ext + "\OpenWithProgids""; ValueType: string; ValueName: """ + ProgId + """; ValueData: """"; Flags: uninsdeletevalue; Tasks: openwith" + NewLine + \
   "Root: HKA; Subkey: ""Software\Classes\Applications\" + AppExe + "\SupportedTypes""; ValueType: string; ValueName: """ + Ext + """; ValueData: """"; Tasks: openwith" + NewLine + \
-  "Root: HKA; Subkey: ""Software\Classes\" + Ext + "\OpenWithProgids""; ValueType: none; ValueName: """ + LegacyName + ".AudioFile""; Flags: deletevalue dontcreatekey" + NewLine
+  "Root: HKA; Subkey: ""Software\Classes\" + Ext + "\OpenWithProgids""; ValueType: none; ValueName: """ + LegacyName + ".AudioFile""; Flags: deletevalue dontcreatekey" + NewLine + \
+  "Root: HKA; Subkey: ""Software\Classes\" + Ext + "\OpenWithProgids""; ValueType: none; ValueName: """ + LegacyName2 + ".AudioFile""; Flags: deletevalue dontcreatekey" + NewLine
 #emit AddAudioType(".mp3")
 #emit AddAudioType(".wav")
 #emit AddAudioType(".m4a")
@@ -163,8 +170,10 @@ begin
   begin
     DeleteDataIn(ExpandConstant('{app}'));
     RemoveDir(ExpandConstant('{app}'));
-    DeleteDataIn(ExpandConstant('{userappdata}\AudioFileSearcher'));
-    RemoveDir(ExpandConstant('{userappdata}\AudioFileSearcher'));
+    DeleteDataIn(ExpandConstant('{userappdata}\MediaSearcher'));
+    RemoveDir(ExpandConstant('{userappdata}\MediaSearcher'));
+    DeleteDataIn(ExpandConstant('{userappdata}\{#LegacyName2}'));
+    RemoveDir(ExpandConstant('{userappdata}\{#LegacyName2}'));
     DeleteDataIn(ExpandConstant('{userappdata}\{#LegacyName}'));
     RemoveDir(ExpandConstant('{userappdata}\{#LegacyName}'));
   end;

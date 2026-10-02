@@ -3,15 +3,15 @@
 - APP_DIR: مجلد البرنامج نفسه (قد يكون للقراءة فقط، مثل Program Files).
 - RESOURCE_DIR: الملفات المضمَّنة مع البرنامج (ملفات اللغة). في نسخة exe هي مجلد _internal.
 - DATA_DIR: مكان الإعدادات والسجلات والنماذج المحمّلة. يكون بجانب البرنامج لو المجلد قابل للكتابة
-  (نسخة محمولة أو التشغيل من الكود)، وإلا في مجلد المستخدم: %APPDATA%\\AudioFileSearcher.
+  (نسخة محمولة أو التشغيل من الكود)، وإلا في مجلد المستخدم: %APPDATA%\\MediaSearcher.
 """
 import os
 import sys
 import tempfile
 
-APP_NAME = "AudioFileSearcher"
-# الاسم التقني قبل الإصدار الذي غيّره (تُنقل بياناته للاسم الجديد تلقائياً)
-LEGACY_APP_NAME = "AudioTranscriber"
+APP_NAME = "MediaSearcher"
+# الأسماء التقنية السابقة، الأحدث أولاً (تُنقل بياناتها للاسم الحالي تلقائياً)
+LEGACY_APP_NAMES = ("AudioFileSearcher", "AudioTranscriber")
 
 if getattr(sys, "frozen", False):
     APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
@@ -36,18 +36,19 @@ def is_writable_dir(path):
 def _user_data_dir():
     base = os.environ.get("APPDATA") or os.path.expanduser("~")
     path = os.path.join(base, APP_NAME)
-    legacy = os.path.join(base, LEGACY_APP_NAME)
-    # بيانات الإصدارات السابقة (بالاسم القديم) تُنقل مرة واحدة، وإن تعذر النقل نستخدمها في مكانها
-    if not os.path.exists(path) and os.path.isdir(legacy):
-        try:
-            os.rename(legacy, path)
-        except OSError:
-            return legacy
+    # بيانات الإصدارات السابقة (بأحد الأسماء القديمة) تُنقل مرة واحدة، وإن تعذر النقل نستخدمها في مكانها
+    for name in LEGACY_APP_NAMES:
+        legacy = os.path.join(base, name)
+        if not os.path.exists(path) and os.path.isdir(legacy):
+            try:
+                os.rename(legacy, path)
+            except OSError:
+                return legacy
     return path
 
 
 # متغير البيئة يسمح بتشغيل البرنامج ببيانات منفصلة (للتجربة والاختبارات) دون لمس إعدادات المستخدم
-DATA_DIR = (os.environ.get("AUDIO_FILE_SEARCHER_DATA_DIR")
+DATA_DIR = (os.environ.get("MEDIA_SEARCHER_DATA_DIR")
             or (APP_DIR if is_writable_dir(APP_DIR) else _user_data_dir()))
 
 LOCALES_DIR = os.path.join(RESOURCE_DIR, "locales")

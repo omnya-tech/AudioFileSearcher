@@ -1,5 +1,5 @@
 {
-  "app_name": "Audio File Searcher",
+  "app_name": "Media Searcher",
   "app_version": "1.0.0",
   "about_title": "About Application",
   "about_description": "A program that turns audio recordings into written text. It runs entirely on your computer and never sends recordings to the internet, to protect your privacy. You can review and correct the text, search all your transcriptions, export them in several formats, and the program learns from your corrections. It can be used entirely from the keyboard and with a screen reader.",
