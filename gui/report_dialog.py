@@ -32,6 +32,11 @@ class ReportDialog(wx.Dialog):
             f"{g('report_processing_time')} {proc.get('formatted', unknown)}",
         ]
 
+        # التقارير القديمة (قبل تسجيل الجهاز) بلا هذا السطر
+        if r.get('device') in ('cpu', 'cuda'):
+            device_name = g(f"device_used_{r['device']}")
+            lines.insert(2, f"{g('report_device')} {device_name}")
+
         audio_sec = audio_info.get('duration_seconds', 0) or 0
         proc_sec = proc.get('total_seconds', 0) or 0
         slow_tip = None
@@ -60,6 +65,9 @@ class ReportDialog(wx.Dialog):
 
         if slow_tip:
             lines += ["", slow_tip]
+
+        if r.get('gpu_error'):
+            lines += ["", g('report_gpu_fallback', error=r['gpu_error'])]
 
         warnings = r.get('warnings', [])
         if warnings:

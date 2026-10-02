@@ -489,3 +489,80 @@ def test_crash_log_records_only_real_crashes(tmp_path, mode):
         assert proc.returncode != 0
         assert "Unhandled exception 0xC0000005" in text and "0x80010108" not in text
         assert "crash.py" in text   # مكان كود بايثون في الخيط الرئيسي
+
+
+# ---------- كرت الشاشة ----------
+
+def test_gpu_status_and_resolve(monkeypatch):
+    import ctranslate2
+    from core import gpu
+    monkeypatch.setattr(ctranslate2, "get_cuda_device_count", lambda: 0)
+    assert gpu.status() == (gpu.NO_GPU, []) and gpu.resolve("auto") == "cpu" and gpu.resolve("cuda") == "cpu"
+    # كرت موجود لكن مكتبات NVIDIA ناقصة: لا نجرّبه (قد يُغلق البرنامج فجأة)
+    monkeypatch.setattr(ctranslate2, "get_cuda_device_count", lambda: 1)
+    monkeypatch.setattr(gpu, "_loadable", lambda name: name != "cudnn64_9.dll")
+    assert gpu.status() == (gpu.MISSING_LIBS, ["cudnn64_9.dll"]) and gpu.resolve("auto") == "cpu"
+    monkeypatch.setattr(gpu, "_loadable", lambda name: True)
+    assert gpu.status()[0] == gpu.AVAILABLE
+    assert gpu.resolve("auto") == "cuda" and gpu.resolve("cuda") == "cuda" and gpu.resolve("cpu") == "cpu"
+    assert gpu.compute_type_for("cuda", "int8") == "int8_float16"
+    assert gpu.compute_type_for("cpu", "float16") == "int8" and gpu.compute_type_for("cpu", "int8") == "int8"
+
+
+def test_gpu_load_failure_falls_back_to_cpu(monkeypatch):
+    from core import audio_processor as ap
+    from core import gpu
+    monkeypatch.setattr(gpu, "resolve", lambda setting: "cuda")
+    monkeypatch.setattr(ap, "_CACHED_MODEL", None)
+    monkeypatch.setattr(ap, "_CACHED_CONFIG", None)
+    t = ap.TranscriptionThread.__new__(ap.TranscriptionThread)
+    t.settings = {"device": "auto", "keep_in_memory": False}
+    t._post = lambda *a: None
+    created = []
+
+    def create(model_target, is_local, device, compute_type, opts):
+        created.append((device, compute_type))
+        if device == "cuda":
+            raise RuntimeError("CUDA failed with error out of memory")
+        return "cpu-model"
+    t._create_model = create
+    model = t._load_model("m", True, {"compute_type": "int8", "threads_count": 0})
+    assert model == "cpu-model" and t.device_used == "cpu" and "out of memory" in t.gpu_error
+    assert created == [("cuda", "int8_float16"), ("cpu", "int8")]
+
+
+def test_old_install_models_merge_into_existing_folder(tmp_path, monkeypatch):
+    """مجلد النماذج موجود في المجلد الجديد: نماذج التثبيت القديم تُدمج فيه ولا تبقى مختبئة"""
+    from core import paths
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    old_models = tmp_path / "Local" / "Programs" / "AudioFileSearcher" / "models"
+    (old_models / "turbo").mkdir(parents=True)
+    (old_models / "turbo" / "model.bin").write_bytes(b"old")
+    (old_models / "small").mkdir()
+    (old_models / "small" / "model.bin").write_bytes(b"old-small")
+    target = tmp_path / "Roaming" / "MediaSearcher" / "models"
+    (target / "small").mkdir(parents=True)
+    (target / "small" / "model.bin").write_bytes(b"new-small")
+    paths._user_data_dir()
+    assert (target / "turbo" / "model.bin").read_bytes() == b"old"
+    # الموجود لا يُستبدل، ويبقى في مكانه القديم
+    assert (target / "small" / "model.bin").read_bytes() == b"new-small"
+    assert (old_models / "small" / "model.bin").exists() and not (old_models / "turbo").exists()
+
+
+def test_report_keeps_history_deletions_made_during_transcription(tmp_path):
+    """التفريغ الجاري لا يعيد تفريغات حذفها المستخدم من السجل أثناءه"""
+    from core import transcription_logger as tl
+    running = tl.TranscriptionLogger()           # سجل التفريغ الجاري (حُمِّل عند بدئه)
+    running.history_file = str(tmp_path / "h.json")
+    running.history = []
+    segs = [("", "كلمة", 0, 1, [])]
+    running.create_report("old.mp3", segs, 0, 1, "m")
+    window = tl.TranscriptionLogger()            # نافذة السجل
+    window.history_file = running.history_file
+    window.history = window.load_history()
+    window.delete_entry(window.history[0])
+    running.create_report("new.mp3", segs, 0, 1, "m")
+    names = [e["file_name"] for e in tl.TranscriptionLogger.load_history(running)]
+    assert names == ["new.mp3"]

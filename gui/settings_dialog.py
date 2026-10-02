@@ -5,6 +5,7 @@ import psutil
 from core.i18n import LocalizationManager
 from core.settings import SettingsManager
 from core.model_manager import ModelManager
+from core import gpu
 from core.learning import LearningStore, export_dataset
 from gui.main.learning import LEARN_MODES
 
@@ -154,9 +155,15 @@ class SettingsDialog(wx.Dialog):
         sizer.Add(self.cb_trans_lang, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         lbl_device = wx.StaticText(page, label=self.i18n.get("lbl_device"))
-        self.cb_device = wx.Choice(page, choices=["cpu", "cuda"])
+        self.cb_device = wx.Choice(page, choices=[self.i18n.get(f"device_{d}") for d in gpu.DEVICES])
         sizer.Add(lbl_device, 0, wx.ALL, 5)
         sizer.Add(self.cb_device, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
+        # حالة الكرت على هذا الجهاز، في خانة يصل إليها قارئ الشاشة بـ Tab
+        lbl_gpu = wx.StaticText(page, label=self.i18n.get("lbl_gpu_status"))
+        self.txt_gpu_status = wx.TextCtrl(page, value=self._gpu_status_text(), style=wx.TE_READONLY | wx.TE_MULTILINE | wx.TE_NO_VSCROLL)
+        self.txt_gpu_status.SetMinSize((-1, self.txt_gpu_status.FromDIP(44)))
+        sizer.Add(lbl_gpu, 0, wx.ALL, 5)
+        sizer.Add(self.txt_gpu_status, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         self.chk_memory = wx.CheckBox(page, label=self.i18n.get("lbl_keep_in_memory"))
         sizer.Add(self.chk_memory, 0, wx.ALL, 5)
@@ -414,7 +421,8 @@ class SettingsDialog(wx.Dialog):
         codes = [code for code, _ in TRANSCRIPTION_LANGUAGES]
         self.cb_trans_lang.SetSelection(codes.index(trans_lang) if trans_lang in codes else 1)
 
-        self.cb_device.SetStringSelection(s.get("device", "cpu"))
+        device = s.get("device", "auto")
+        self.cb_device.SetSelection(gpu.DEVICES.index(device) if device in gpu.DEVICES else 0)
         self.chk_memory.SetValue(s.get("keep_in_memory", True))
         self.chk_local.SetValue(s.get("use_local_model", False))
 
@@ -451,18 +459,20 @@ class SettingsDialog(wx.Dialog):
         self.on_correction_toggled()
         self.update_model_state()
 
-    def _cuda_available(self):
-        try:
-            import ctranslate2
-            return ctranslate2.get_cuda_device_count() > 0
-        except Exception:
-            return False
+    def _gpu_status_text(self):
+        state, missing = gpu.status()
+        if state == gpu.AVAILABLE:
+            return self.i18n.get("gpu_available")
+        if state == gpu.MISSING_LIBS:
+            return self.i18n.get("gpu_missing_libs", libs="، ".join(missing) if self.i18n.is_rtl else ", ".join(missing))
+        return self.i18n.get("gpu_none")
 
     def on_save(self, event):
-        device = self.cb_device.GetStringSelection() or "cpu"
-        if device == "cuda" and not self._cuda_available():
-            wx.MessageBox(self.i18n.get("msg_cuda_not_available"), self.i18n.get("dialog_warning_title"), wx.ICON_WARNING)
-            device = "cpu"
+        device = gpu.DEVICES[self.cb_device.GetSelection()] if self.cb_device.GetSelection() >= 0 else "auto"
+        if device == "cuda" and gpu.status()[0] != gpu.AVAILABLE:
+            # نحفظ الاختيار كما هو: التفريغ يستخدم المعالج تلقائياً حتى يصبح الكرت جاهزاً
+            wx.MessageBox(self.i18n.get("msg_cuda_not_available", reason=self._gpu_status_text()),
+                          self.i18n.get("dialog_warning_title"), wx.ICON_WARNING)
 
         output_dir = self.txt_dir.GetValue().strip()
         if output_dir and not os.path.isdir(output_dir):

@@ -575,3 +575,158 @@ def test_reports_kept_and_opened_from_history(main_window, i18n, monkeypatch, tm
     assert len(os.listdir(logger.reports_dir)) == 2
     logger.clear_history()
     assert os.listdir(logger.reports_dir) == []
+
+
+def test_device_choice_translated_with_status(main_window, i18n, settings, monkeypatch):
+    from core import gpu
+    from gui.settings_dialog import SettingsDialog
+    from gui.report_dialog import ReportDialog
+    monkeypatch.setattr(gpu, "status", lambda: (gpu.NO_GPU, []))
+    dlg = SettingsDialog(main_window, i18n, settings)
+    labels = [dlg.cb_device.GetString(i) for i in range(dlg.cb_device.GetCount())]
+    assert labels == [i18n.get(f"device_{d}") for d in gpu.DEVICES] and "cpu" not in labels
+    assert dlg.txt_gpu_status.GetValue() == i18n.get("gpu_none")
+    dlg.Destroy()
+    report = ReportDialog(main_window, i18n, {"device": "cuda", "gpu_error": None})
+    assert i18n.get("device_used_cuda") in report._summary_text()
+    report.Destroy()
+    fallback = ReportDialog(main_window, i18n, {"device": "cpu", "gpu_error": "out of memory"})
+    assert "out of memory" in fallback._summary_text()
+    fallback.Destroy()
+
+
+def _history_with(i18n, tmp_path, monkeypatch):
+    """سجل فيه ثلاثة تفريغات بأسماء ومدد ودقة مختلفة"""
+    from core import transcription_logger as tl
+    logger = tl.TranscriptionLogger(i18n)
+    for name, duration, score, device in (("b-lecture.mp3", 600, 92, "cpu"), ("a-quran.mp3", 60, 70, "cuda"),
+                                          ("c-meeting.mp3", 3600, 85, None)):
+        audio = tmp_path / name
+        audio.write_bytes(b"x")
+        extra = {"score": score, "device": device} if device else {"score": score}
+        logger.create_report(str(audio), [("", "كلمة " * 10, 0, 1, [])], 0, duration / 10,
+                             "deepdml/faster-whisper-large-v3-turbo-ct2", audio_duration=duration, extra=extra)
+    return logger
+
+
+def test_history_stats_search_sort_columns(main_window, i18n, tmp_path, monkeypatch):
+    from gui.history_dialog import HistoryDialog, SORTS
+    logger = _history_with(i18n, tmp_path, monkeypatch)
+    dlg = HistoryDialog(main_window, i18n)
+    dlg.logger = logger
+    dlg.load_history()
+    stats = dlg.txt_stats.GetValue()
+    assert i18n.plural("n_files", 3) in stats and "1:11:00" in stats and "30" in stats   # 600+60+3600 ثانية، 30 كلمة
+    names = lambda: [dlg.list_ctrl.GetItemText(i, 1) for i in range(dlg.list_ctrl.GetItemCount())]
+    assert names() == ["c-meeting.mp3", "a-quran.mp3", "b-lecture.mp3"]          # الأحدث أولاً
+    for i, (key, _, _) in enumerate(SORTS):
+        dlg.cb_sort.SetSelection(i)
+        dlg.refresh_list()
+        if key == "history_sort_name":
+            assert names() == ["a-quran.mp3", "b-lecture.mp3", "c-meeting.mp3"]
+        if key == "history_sort_longest":
+            assert names()[0] == "c-meeting.mp3"
+        if key == "history_sort_least_accurate":
+            assert names()[0] == "a-quran.mp3"
+    # الأعمدة الجديدة: الدقة والنموذج ومكان المعالجة (فارغ للتفريغ الذي لم يُسجَّل فيه)
+    row = names().index("a-quran.mp3")
+    assert dlg.list_ctrl.GetItemText(row, 5) == "70%"
+    assert dlg.list_ctrl.GetItemText(row, 6) == "large-v3-turbo-ct2"
+    assert dlg.list_ctrl.GetItemText(row, 7) == i18n.get("device_used_cuda")
+    assert dlg.list_ctrl.GetItemText(names().index("c-meeting.mp3"), 7) == ""
+    # البحث
+    dlg.txt_search.SetValue("QURAN")
+    assert names() == ["a-quran.mp3"]
+    dlg.txt_search.SetValue("لا يوجد")
+    # الرسالة في أول عمود (أول ما يقرؤه قارئ الشاشة)
+    assert dlg.list_ctrl.GetItemCount() == 1 and dlg.list_ctrl.GetItemText(0, 0) == i18n.get("history_no_matches")
+    assert not dlg.btn_report.IsEnabled() and not dlg.btn_delete.IsEnabled()
+    dlg.Destroy()
+
+
+def test_history_delete_and_open_transcript(main_window, i18n, tmp_path, monkeypatch):
+    import os
+    from gui.history_dialog import HistoryDialog
+    logger = _history_with(i18n, tmp_path, monkeypatch)
+    dlg = HistoryDialog(main_window, i18n)
+    dlg.logger = logger
+    dlg.load_history()
+
+    # فتح التفريغ: الملف المسجل بعد الحفظ التلقائي، وإلا ملف ترجمة بجانب الصوت بنفس الاسم
+    entry = dlg.rows[0]                                   # c-meeting
+    srt = tmp_path / "saved" / "c-meeting.srt"
+    srt.parent.mkdir()
+    srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nكلمة\n", encoding="utf-8")
+    logger.set_output(entry["report_file"], str(srt))
+    assert dlg.transcript_path(entry) == str(srt)
+    beside = tmp_path / "b-lecture.vtt"
+    beside.write_text("WEBVTT\n", encoding="utf-8")
+    assert dlg.transcript_path(next(e for e in dlg.rows if e["file_name"] == "b-lecture.mp3")) == str(beside)
+    loaded = []
+    monkeypatch.setattr(main_window, "load_srt_file", lambda p: loaded.append(p))
+    monkeypatch.setattr(dlg, "EndModal", lambda code: None)
+    dlg.list_ctrl.Select(0)
+    dlg.on_open_transcript(None)
+    wx.Yield()
+    assert loaded == [str(srt)]
+    # تفريغ بلا ملف: رسالة واضحة
+    import gui.history_dialog as hd
+    messages = []
+    monkeypatch.setattr(hd.wx, "MessageBox", lambda msg, *a, **k: messages.append(msg))
+    dlg.list_ctrl.Select([e["file_name"] for e in dlg.rows].index("a-quran.mp3"))
+    dlg.on_open_transcript(None)
+    assert messages and "a-quran.mp3" in messages[0]
+
+    # حذف تفريغ واحد مع تقريره، والتركيز على التالي
+    monkeypatch.setattr(wx.MessageDialog, "ShowModal", lambda self: wx.ID_YES)
+    victim = dlg.rows[0]
+    report_path = os.path.join(logger.reports_dir, victim["report_file"])
+    assert os.path.exists(report_path)
+    dlg.list_ctrl.Select(0)
+    dlg.on_delete(None)
+    assert len(logger.history) == 2 and victim not in logger.history and not os.path.exists(report_path)
+    assert len(dlg.rows) == 2 and dlg.list_ctrl.GetFirstSelected() == 0
+    assert i18n.plural("n_files", 2) in dlg.txt_stats.GetValue()
+    dlg.Destroy()
+
+
+def test_batch_next_file_stays_paused(main_window, i18n, monkeypatch, tmp_path):
+    from gui.processing_dialog import ProcessingDialog
+    import gui.main.transcription as tr
+    created = []
+
+    class FakeThread:
+        def __init__(self, *a, **k):
+            self.paused = False
+            created.append(self)
+        def pause(self):
+            self.paused = True
+    monkeypatch.setattr(tr, "TranscriptionThread", FakeThread)
+    main_window.processing_dialog = dlg = ProcessingDialog(main_window, i18n)
+    dlg.set_paused(True)
+    main_window._start_transcription(str(tmp_path / "next.mp3"))
+    assert created[-1].paused
+    dlg.set_paused(False)
+    main_window._start_transcription(str(tmp_path / "other.mp3"))
+    assert not created[-1].paused
+    main_window.transcription_thread = None
+    main_window._close_processing_dialog()
+
+
+def test_history_does_not_open_transcript_while_transcribing(main_window, i18n, tmp_path, monkeypatch):
+    from gui.history_dialog import HistoryDialog
+    import gui.history_dialog as hd
+    logger = _history_with(i18n, tmp_path, monkeypatch)
+    srt = tmp_path / "b-lecture.srt"
+    srt.write_text("1\n00:00:00,000 --> 00:00:01,000\nكلمة\n", encoding="utf-8")
+    dlg = HistoryDialog(main_window, i18n)
+    dlg.logger = logger
+    dlg.load_history()
+    dlg.list_ctrl.Select([e["file_name"] for e in dlg.rows].index("b-lecture.mp3"))
+    monkeypatch.setattr(main_window, "transcription_thread_running", lambda: True)
+    loaded, messages = [], []
+    monkeypatch.setattr(main_window, "load_srt_file", lambda p: loaded.append(p))
+    monkeypatch.setattr(hd.wx, "MessageBox", lambda msg, *a, **k: messages.append(msg))
+    dlg.on_open_transcript(None)
+    assert not loaded and messages == [i18n.get("msg_history_busy")]
+    dlg.Destroy()

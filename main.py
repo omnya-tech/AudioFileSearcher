@@ -41,10 +41,6 @@ class TranscriptionApp(wx.App):
             return False
         single_instance.clear_inbox()
 
-        # اسم ثابت يراه المثبت وبرنامج الإزالة (AppMutex)، فيطلبان إغلاق البرنامج قبل استبدال ملفاته
-        self.running_mutexes = [ctypes.windll.kernel32.CreateMutexW(None, False, name)
-                                for name in ("MediaSearcher.Running", "Global\\MediaSearcher.Running")]
-
         self.settings = SettingsManager()
         self.settings.apply_installer_language()
         if self.settings.get("theme", "light") == "dark":

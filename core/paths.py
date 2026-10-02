@@ -49,16 +49,32 @@ def _move_old_install_data(path):
     نقل بيانات التثبيت القديم (بجانب البرنامج) إلى مجلد المستخدم. كل عنصر يُنقل مرة واحدة ولا يُستبدل
     عنصر موجود، فلو انقطع النقل في المنتصف يكمل في التشغيل التالي.
     """
-    import shutil
     for old in _old_install_dirs():
         for item in DATA_ITEMS:
-            source, target = os.path.join(old, item), os.path.join(path, item)
-            if os.path.exists(source) and not os.path.exists(target):
-                try:
-                    os.makedirs(path, exist_ok=True)
-                    shutil.move(source, target)
-                except OSError:
-                    pass
+            _move_missing(os.path.join(old, item), os.path.join(path, item))
+
+
+def _move_missing(source, target):
+    """
+    نقل ملف أو مجلد إن لم يكن موجوداً في الهدف. المجلد الموجود في الهدف (مثل models) يُدمج محتوى بمحتوى،
+    حتى لا يبقى نموذج قديم مختبئاً في مجلد التثبيت القديم لأن مجلد النماذج الجديد أُنشئ قبله.
+    """
+    import shutil
+    if not os.path.exists(source):
+        return
+    try:
+        if not os.path.exists(target):
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.move(source, target)
+        elif os.path.isdir(source) and os.path.isdir(target):
+            for name in os.listdir(source):
+                _move_missing(os.path.join(source, name), os.path.join(target, name))
+            try:
+                os.rmdir(source)  # يُحذف فقط لو فرغ
+            except OSError:
+                pass
+    except OSError:
+        pass
 
 
 def _user_data_dir():

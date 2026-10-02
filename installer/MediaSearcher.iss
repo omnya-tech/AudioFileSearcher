@@ -20,7 +20,8 @@
 
 [Setup]
 ; معرّف ثابت: لا تغيّره أبداً، وإلا يُعامَل كل إصدار جديد كبرنامج مختلف.
-; (بقي كما هو بعد تغيير الاسم التقني من AudioTranscriber ثم AudioFileSearcher، فيُحدَّث التثبيت القديم في مكانه ببياناته ونماذجه)
+; (بقي كما هو بعد تغيير الاسم التقني من AudioTranscriber ثم AudioFileSearcher؛ والتثبيت القديم للمستخدم وحده يُزال قبل التثبيت
+; في Program Files، وينقل البرنامج بياناته ونماذجه إلى %APPDATA% عند أول تشغيل: انظر RemovePerUserInstall وcore/paths.py)
 AppId={{{#AppGuid}}
 AppName={#AppName}
 AppVersion={#AppVersion}
@@ -42,10 +43,10 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 
-; البرنامج مفتوح: يطلب المثبت وبرنامج الإزالة إغلاقه أولاً (الاسم نفسه في main.py)
-; والاسمان القديمان: الإصدار السابق المفتوح يُطلب إغلاقه أيضاً
-AppMutex=MediaSearcher.Running,Global\MediaSearcher.Running,{#LegacyName}.Running,Global\{#LegacyName}.Running,{#LegacyName2}.Running,Global\{#LegacyName2}.Running
-CloseApplications=yes
+; البرنامج المفتوح يُغلق تلقائياً دون سؤال عند التحديث والإزالة (انظر CloseRunningProgram).
+; لا نستخدم AppMutex لأنه يسأل المستخدم أن يغلقه بنفسه. وCloseApplications=force احتياط أخير
+; لو بقي ملف مستخدماً: يغلق البرنامج الذي يستخدمه دون سؤال
+CloseApplications=force
 RestartApplications=no
 ChangesAssociations=yes
 
@@ -57,7 +58,6 @@ OutputDir=..\dist
 OutputBaseFilename=MediaSearcher-Setup-{#AppVersion}
 Compression=lzma2/ultra64
 SolidCompression=yes
-LZMAUseSeparateProcess=yes
 SetupLogging=yes
 
 [Languages]
@@ -143,6 +143,27 @@ var
 { الإصدارات السابقة كانت تُثبَّت للمستخدم الحالي فقط (%LOCALAPPDATA%\Programs، وسجلها في HKCU).
   نزيلها بصمت قبل التثبيت حتى لا يظهر البرنامج مرتين. برنامج الإزالة القديم في الوضع الصامت لا يحذف بيانات المستخدم
   (سؤال الحذف إجابته الافتراضية «لا»)، والبرنامج الجديد ينقل تلك البيانات إلى %APPDATA%\MediaSearcher عند أول تشغيل }
+{ إغلاق البرنامج المفتوح (بالاسم الحالي والأسماء السابقة): طلب إغلاق عادي أولاً، ثم إجباري لو لم يُغلق.
+  التفريغ الجاري يُستكمل بعد التحديث (يحفظ البرنامج التقدم كل بضع ثوانٍ) }
+procedure CloseRunningProgram();
+var
+  ResultCode: Integer;
+  Images: String;
+begin
+  Images := '/IM {#AppExe} /IM {#LegacyName}.exe /IM {#LegacyName2}.exe';
+  Exec(ExpandConstant('{sys}	askkill.exe'), Images, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(2000);
+  Exec(ExpandConstant('{sys}	askkill.exe'), '/F /T ' + Images, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(500);
+end;
+
+{ قبل فحص الملفات المستخدمة وقبل التثبيت (بعد ضغط «تثبيت»، فإلغاء المثبت قبله لا يغلق البرنامج) }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  CloseRunningProgram();
+  Result := '';
+end;
+
 procedure RemovePerUserInstall();
 var
   Uninstaller: String;
@@ -182,8 +203,12 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then
+  begin
+    { بعد تأكيد الإزالة، لا عند فتح برنامج الإزالة: لو تراجع المستخدم لا يُغلق البرنامج }
+    CloseRunningProgram();
     DeleteUserData := SuppressibleMsgBox(CustomMessage('DeleteUserData'),
       mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES;
+  end;
 
   if (CurUninstallStep = usPostUninstall) and DeleteUserData then
   begin

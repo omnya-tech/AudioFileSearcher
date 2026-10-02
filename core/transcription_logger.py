@@ -12,6 +12,14 @@ HISTORY_LIMIT = 100
 def log_error(msg):
     print(f"[ERROR]: {msg}")
 
+def format_hours(seconds):
+    """مدة طويلة (مجموع عدة تفريغات) بصيغة ساعات:دقائق:ثوانٍ"""
+    seconds = max(0, int(round(seconds)))
+    hours, rem = divmod(seconds, 3600)
+    minutes, secs = divmod(rem, 60)
+    return f"{hours:d}:{minutes:02d}:{secs:02d}"
+
+
 class TranscriptionLogger:
     def __init__(self, i18n=None):
         self.i18n = i18n
@@ -83,11 +91,16 @@ class TranscriptionLogger:
         # التقرير الكامل (مع تفاصيل كل جملة) في ملف خاص به يُفتح من نافذة السجل،
         # والسجل نفسه يحفظ الملخص فقط حتى لا يتضخم
         report_file = self._save_report(report)
-        history_entry = {k: v for k, v in report.items() if k != "segment_details"}
         if report_file:
-            history_entry["report_file"] = report_file
+            # يعود مع التقرير حتى تسجّل النافذة الرئيسية مكان ملف التفريغ بعد حفظه (set_output)
+            report["report_file"] = report_file
+        history_entry = {k: v for k, v in report.items() if k != "segment_details"}
 
+        # نقرأ السجل من القرص من جديد: ربما حذف المستخدم منه تفريغات أثناء هذا التفريغ (من نافذة السجل)،
+        # والنسخة التي في الذاكرة من وقت بدء التفريغ كانت ستعيدها
+        fresh = self.load_history()
         with self.file_lock:
+            self.history = fresh
             self.history.insert(0, history_entry)
             removed = self.history[HISTORY_LIMIT:]
             self.history = self.history[:HISTORY_LIMIT]
@@ -133,6 +146,32 @@ class TranscriptionLogger:
             except (OSError, ValueError) as e:
                 log_error(f"Error loading report {name}: {e}")
         return dict(entry)
+
+    def set_output(self, report_file, output_path):
+        """مكان ملف التفريغ المحفوظ تلقائياً، حتى يُفتح من السجل"""
+        if not report_file or not output_path:
+            return
+        with self.file_lock:
+            for entry in self.history:
+                if entry.get("report_file") == report_file:
+                    entry["output_file"] = output_path
+                    break
+            else:
+                return
+        self.save_history()
+
+    def delete_entry(self, entry):
+        """حذف تفريغ واحد من السجل مع ملف تقريره"""
+        with self.file_lock:
+            for i, e in enumerate(self.history):
+                if e is entry or e == entry:
+                    del self.history[i]
+                    break
+            else:
+                return False
+        self._delete_report(entry)
+        self.save_history()
+        return True
 
     def clear_history(self):
         with self.file_lock:

@@ -2,6 +2,7 @@
 import wx
 import os
 from core.audio_processor import TranscriptionThread
+from core.transcription_logger import TranscriptionLogger
 from core.time_utils import format_clock
 from core.logger import log_error
 from core import recovery
@@ -87,6 +88,9 @@ class TranscriptionMixin:
         self._last_recovery_save = time.time()
         self._audio_duration = 0
         self.transcription_thread = TranscriptionThread(self, path, self.i18n, resume_segments=resume_segments)
+        # تفريغ مجلد والمستخدم أوقفه مؤقتاً قرب نهاية الملف السابق: الملف التالي يبدأ متوقفاً أيضاً
+        if self.processing_dialog and self.processing_dialog.is_paused:
+            self.transcription_thread.pause()
 
     def _ask_resume(self, path):
         """لو فيه تفريغ ناقص لهذا الملف: استكمال، أو بدء من جديد، أو تراجع. ترجع (نكمل؟، المقاطع السابقة)"""
@@ -273,6 +277,10 @@ class TranscriptionMixin:
                 saved_path = None
             else:
                 saved_path = self.auto_save_results()
+            # مكان ملف التفريغ في السجل، حتى يُفتح منه لاحقاً
+            report_file = (event.data.get("report") or {}).get("report_file")
+            if saved_path and report_file:
+                TranscriptionLogger(self.i18n).set_output(report_file, saved_path)
 
             if self.is_batch_mode:
                 self.batch_current_idx += 1

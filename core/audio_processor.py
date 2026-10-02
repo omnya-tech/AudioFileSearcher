@@ -12,6 +12,7 @@ from core.learning import LearningStore, hotwords_for_model
 from core import dictionaries
 from core.transcription_logger import TranscriptionLogger, ErrorDetector
 from core.model_manager import ModelManager
+from core import gpu
 from core.logger import log_error
 from core.time_utils import format_range
 
@@ -198,16 +199,14 @@ class TranscriptionThread(threading.Thread):
 
     def _load_model(self, model_target, is_local, opts):
         global _CACHED_MODEL, _CACHED_CONFIG
-        device = self.settings.get("device", "cpu")
+        # الكرت يُستخدم فقط لو كان جاهزاً (موجوداً ومعه مكتبات NVIDIA)، وإلا المعالج
+        device = gpu.resolve(self.settings.get("device", "auto"))
+        compute_type = gpu.compute_type_for(device, opts["compute_type"])
         keep_in_memory = self.settings.get("keep_in_memory", True)
 
-        model_kwargs = {"device": device, "compute_type": opts["compute_type"], "num_workers": 1}
-        if opts["threads_count"] > 0: model_kwargs["cpu_threads"] = opts["threads_count"]
-        if is_local: model_kwargs["local_files_only"] = True
-
-        current_config = (model_target, device, opts["compute_type"], opts["threads_count"])
-
+        current_config = (model_target, device, compute_type, opts["threads_count"])
         if keep_in_memory and _CACHED_MODEL is not None and _CACHED_CONFIG == current_config:
+            self.device_used = device
             return _CACHED_MODEL
 
         # تحرير النموذج القديم قبل تحميل الجديد لتوفير الذاكرة
@@ -216,11 +215,28 @@ class TranscriptionThread(threading.Thread):
         gc.collect()
 
         self._post("loading_local" if is_local else "loading")
-        model = WhisperModel(model_target, **model_kwargs)
+        try:
+            model = self._create_model(model_target, is_local, device, compute_type, opts)
+        except Exception as e:
+            if device != "cuda":
+                raise
+            # الكرت لم يعمل (ذاكرة غير كافية، أو نوع حساب لا يدعمه...): نكمل على المعالج ونذكر السبب في التقرير
+            log_error(f"GPU model load failed, falling back to CPU: {e}")
+            self.gpu_error = str(e)
+            device, compute_type = "cpu", gpu.compute_type_for("cpu", opts["compute_type"])
+            current_config = (model_target, device, compute_type, opts["threads_count"])
+            model = self._create_model(model_target, is_local, device, compute_type, opts)
+        self.device_used = device
         if keep_in_memory:
             _CACHED_MODEL = model
             _CACHED_CONFIG = current_config
         return model
+
+    def _create_model(self, model_target, is_local, device, compute_type, opts):
+        model_kwargs = {"device": device, "compute_type": compute_type, "num_workers": 1}
+        if opts["threads_count"] > 0: model_kwargs["cpu_threads"] = opts["threads_count"]
+        if is_local: model_kwargs["local_files_only"] = True
+        return WhisperModel(model_target, **model_kwargs)
 
     def run(self):
         with _RUN_LOCK:
@@ -359,6 +375,8 @@ class TranscriptionThread(threading.Thread):
                 "flagged_segments": flagged_segments,
                 "segment_details": segment_details,
                 "language": getattr(info, "language", None),
+                "device": getattr(self, "device_used", "cpu"),
+                "gpu_error": getattr(self, "gpu_error", None),
             }
         )
 

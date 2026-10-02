@@ -28,7 +28,12 @@ On first run, the program offers to open the Model Manager (Ctrl+D) with the mod
    - **Run in background** hides the window while transcription continues; progress shows in the status bar and window title. Press `Ctrl+I` to bring it back. When it finishes, the program's taskbar button flashes if you are in another program.
 5. Sentences appear in the results list as they are transcribed.
 6. When finished, a sound plays and the quality report opens. Close it with `Esc`; focus moves to the first result line.
-7. Every report is kept: open "Activity History" with `Ctrl+H`, choose any transcription, and press `Enter` (or "View report") to read its full report again. The history keeps the last 100 transcriptions.
+7. Every transcription is recorded in "Activity History" (`Ctrl+H`), which keeps the last 100:
+   - A **summary** at the top: number of transcriptions, total audio and processing time, and word count.
+   - **Search** by file name, and **sort** by newest, oldest, name, longest audio, or least accurate.
+   - Columns: date, file, audio duration, processing time, words, accuracy, model, processed on (processor or graphics card), and status.
+   - `Enter` or "View report": the full report. "Open transcript": the transcript in the results list with its audio, for review (Word and text files open in their own program). "Open folder": the transcript's folder.
+   - `Delete` or "Delete": removes the selected transcription and its report from the history only; audio and transcript files are not deleted.
 
 ## Reviewing and correcting results
 
@@ -89,6 +94,7 @@ In Settings, learning can be set to: ask each time (default), automatic (after t
 - **Skip silence and music**: on by default. Prevents the model from writing made-up text during silence and noise, speeds up long files, and is tuned not to cut off long drawn-out endings such as recitation.
 - **Source audio language**: the language of the recording, or "Auto-detect".
 - **Model status**: shows whether the selected model is on your computer or will be downloaded.
+- **Processing unit**: "Automatic" (the default) uses an NVIDIA graphics card when it is ready, which is much faster, and the processor otherwise. The "Graphics card status" box below it shows what your computer has: no NVIDIA card, a card missing the CUDA 12 and cuDNN 9 libraries from NVIDIA, or a ready card. If the card cannot be used during transcription, the program continues on the processor and says why in the report; the report always shows where processing ran.
 - **Theme**: light or dark. The main window changes immediately; other windows after restarting the program.
 
 ## Keyboard shortcuts

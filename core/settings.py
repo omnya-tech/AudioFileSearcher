@@ -17,7 +17,7 @@ class SettingsManager:
         return {
             "user_mode": "beginner",
             "model_size": "deepdml/faster-whisper-large-v3-turbo-ct2",
-            "device": "cpu",
+            "device": "auto",
             "keep_in_memory": True,
             "use_local_model": False,
             "local_model_path": "",
