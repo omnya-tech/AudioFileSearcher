@@ -185,6 +185,10 @@ class MenusMixin:
         dlg.Destroy()
 
     def on_check_progress(self, event):
+        # التفريغ في الخلفية: Ctrl+I يعيد نافذة المعالجة، وفيها النسبة والنص حتى الآن
+        if self.processing_dialog and not self.processing_dialog.IsShown():
+            self.show_processing_dialog()
+            return
         if self.current_percent is not None:
             msg_template = self.i18n.get("msg_progress_info")
             if "{percent}" in msg_template:

@@ -79,6 +79,11 @@ class TranscriptionMixin:
         self.all_segments = list(resume_segments or [])
         self.txt_filter.ChangeValue("")
         self.update_list()
+        if self.processing_dialog:
+            if self.all_segments:
+                self.processing_dialog.set_text([seg[1] for seg in self.all_segments], self.all_segments[-1][3])
+            else:
+                self.processing_dialog.clear_text()
         self._last_recovery_save = time.time()
         self._audio_duration = 0
         self.transcription_thread = TranscriptionThread(self, path, self.i18n, resume_segments=resume_segments)
@@ -177,6 +182,7 @@ class TranscriptionMixin:
                 self.SetTitle(self.get_base_title())
 
             if self.processing_dialog:
+                self.processing_dialog.set_batch(self.batch_current_idx + 1, len(self.batch_queue))
                 self.processing_dialog.update_progress(0, 100, self.i18n.get("status_init_engine"), filename)
 
             # في وضع المجلد يُستكمل أي ملف توقف سابقاً تلقائياً، بدون سؤال عن كل ملف
@@ -196,6 +202,7 @@ class TranscriptionMixin:
             msg = self.i18n.get("msg_batch_done", count=self.i18n.plural("n_files", succeeded))
             if self.batch_failed:
                 msg += "\n" + self.i18n.get("msg_batch_failed_count", count=self.i18n.plural("n_files", self.batch_failed))
+            self._call_attention()
             wx.MessageBox(msg, self.i18n.get("dialog_success_title"), wx.ICON_INFORMATION)
             if out_dir and succeeded and self.settings.get("open_folder_after_save", False):
                 self.open_in_file_manager(out_dir)
@@ -222,7 +229,10 @@ class TranscriptionMixin:
 
         elif status == "segment":
             self._audio_duration = event.data.get("duration") or 0
-            self.append_segment(event.data["segment"])
+            seg = event.data["segment"]
+            self.append_segment(seg)
+            if self.processing_dialog:
+                self.processing_dialog.add_segment(seg[1], seg[3], self._audio_duration)
             self._save_recovery()
 
         elif status == "progress":
@@ -280,6 +290,7 @@ class TranscriptionMixin:
                 self.result_list.Select(0)
             # تنبيه صوتي بانتهاء التفريغ، مفيد لمن يعمل في نافذة أخرى أثناء الانتظار
             wx.Bell()
+            self._call_attention()
 
             if saved_path and self.settings.get("open_folder_after_save", False):
                 self.open_in_file_manager(saved_path)
@@ -314,6 +325,35 @@ class TranscriptionMixin:
                 self._set_controls_busy(False)
                 wx.MessageBox(msg, self.i18n.get("dialog_error_title"), wx.ICON_ERROR)
                 self.result_list.SetFocus()
+
+    def pause_processing(self):
+        if self.transcription_thread:
+            self.transcription_thread.pause()
+        self.status_bar.SetStatusText(self.i18n.get("status_processing_paused"))
+
+    def resume_processing(self):
+        if self.transcription_thread:
+            self.transcription_thread.resume()
+        self.status_bar.SetStatusText(self.i18n.get("status_processing_resumed"))
+
+    def send_processing_to_background(self):
+        """إخفاء نافذة المعالجة والتفريغ مستمر: التقدم في شريط الحالة وعنوان النافذة، وCtrl+I يعيدها"""
+        if not self.processing_dialog:
+            return
+        self.processing_dialog.Hide()
+        self.status_bar.SetStatusText(self.i18n.get("status_processing_background"))
+        self.result_list.SetFocus()
+
+    def show_processing_dialog(self):
+        if self.processing_dialog:
+            self.processing_dialog.Show()
+            self.processing_dialog.Raise()
+            self.processing_dialog.list_ctrl.SetFocus()
+
+    def _call_attention(self):
+        """لو كان المستخدم في برنامج آخر: وميض زر البرنامج في شريط المهام حتى يعود"""
+        if not self.IsActive():
+            self.RequestUserAttention()
 
     def cancel_processing(self):
         if self.transcription_thread:

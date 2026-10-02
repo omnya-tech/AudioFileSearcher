@@ -1,9 +1,13 @@
 import json
 import os
 import threading
+import uuid
 from datetime import datetime
 from core.paths import LOGS_DIR, ensure_dir
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
+# أقصى عدد للتفريغات في السجل: الأقدم يُحذف مع تقريره
+HISTORY_LIMIT = 100
 
 def log_error(msg):
     print(f"[ERROR]: {msg}")
@@ -76,20 +80,65 @@ class TranscriptionLogger:
         if extra:
             report.update(extra)
 
-        # التفاصيل الكاملة لكل مقطع تظهر في التقرير فقط، ولا داعي لتضخيم ملف السجل بها
+        # التقرير الكامل (مع تفاصيل كل جملة) في ملف خاص به يُفتح من نافذة السجل،
+        # والسجل نفسه يحفظ الملخص فقط حتى لا يتضخم
+        report_file = self._save_report(report)
         history_entry = {k: v for k, v in report.items() if k != "segment_details"}
+        if report_file:
+            history_entry["report_file"] = report_file
 
         with self.file_lock:
             self.history.insert(0, history_entry)
-            if len(self.history) > 100:
-                self.history = self.history[:100]
+            removed = self.history[HISTORY_LIMIT:]
+            self.history = self.history[:HISTORY_LIMIT]
+        for entry in removed:
+            self._delete_report(entry)
 
         self.save_history()
         return report
 
+    @property
+    def reports_dir(self):
+        # بجانب ملف السجل دائماً (والاختبارات تغيّر مكان السجل فيتبعها التقارير)
+        return os.path.join(os.path.dirname(self.history_file), "reports")
+
+    def _save_report(self, report) -> Optional[str]:
+        name = f"{datetime.now():%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}.json"
+        try:
+            os.makedirs(self.reports_dir, exist_ok=True)
+            with open(os.path.join(self.reports_dir, name), "w", encoding="utf-8") as f:
+                json.dump(report, f, ensure_ascii=False, indent=1)
+            return name
+        except OSError as e:
+            log_error(f"Error saving report: {e}")
+            return None
+
+    def _delete_report(self, entry):
+        name = entry.get("report_file")
+        if name:
+            try:
+                os.remove(os.path.join(self.reports_dir, os.path.basename(name)))
+            except OSError:
+                pass
+
+    def load_report(self, entry) -> Dict[str, Any]:
+        """التقرير الكامل لتفريغ من السجل. التفريغات القديمة (قبل حفظ التقارير) تُعرض بملخصها فقط"""
+        name = entry.get("report_file")
+        if name:
+            try:
+                with open(os.path.join(self.reports_dir, os.path.basename(name)), encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+            except (OSError, ValueError) as e:
+                log_error(f"Error loading report {name}: {e}")
+        return dict(entry)
+
     def clear_history(self):
         with self.file_lock:
-            self.history = []
+            removed, self.history = self.history, []
+        for entry in removed:
+            self._delete_report(entry)
         self.save_history()
 
     def format_duration(self, seconds: float) -> str:

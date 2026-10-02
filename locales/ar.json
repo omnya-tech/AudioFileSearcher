@@ -417,5 +417,17 @@
   "n_terms_few": "{n} مصطلحات",
   "n_terms_many": "{n} مصطلحًا",
   "about_version": "الإصدار {version}",
-  "menu_guide": "دليل الاستخدام"
+  "menu_guide": "دليل الاستخدام",
+  "btn_pause_processing": "إيقاف مؤقت",
+  "btn_resume_processing": "استئناف",
+  "btn_processing_background": "العمل في الخلفية",
+  "proc_live_text": "النص حتى الآن:",
+  "proc_batch": "الملف {current} من {total}",
+  "proc_position": "الموضع {position} من {duration}",
+  "proc_elapsed": "مضى {elapsed}",
+  "proc_paused": "متوقف مؤقتاً عند {percent}%. اضغط «استئناف» للمتابعة.",
+  "status_processing_paused": "التفريغ متوقف مؤقتاً (يتوقف بعد الجملة الجاري تفريغها).",
+  "status_processing_resumed": "استُؤنف التفريغ.",
+  "status_processing_background": "التفريغ مستمر في الخلفية. اضغط Ctrl+I لعرض نافذة المعالجة.",
+  "btn_view_report": "عرض التقرير"
 }

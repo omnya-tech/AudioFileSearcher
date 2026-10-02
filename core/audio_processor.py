@@ -91,10 +91,37 @@ class TranscriptionThread(threading.Thread):
         self.error_detector = ErrorDetector(i18n)
         self.start_time = None
         self._abort = threading.Event()
+        # مضبوط = يعمل، ومُزال = متوقف مؤقتاً
+        self._running = threading.Event()
+        self._running.set()
         self.start()
 
     def abort(self):
         self._abort.set()
+        # لو كان متوقفاً مؤقتاً يستيقظ ليرى الإلغاء
+        self._running.set()
+
+    def pause(self):
+        """إيقاف مؤقت بعد الجملة الجاري تفريغها (لا يمكن قطع حساب النموذج في منتصفه)"""
+        self._running.clear()
+
+    def resume(self):
+        self._running.set()
+
+    @property
+    def paused(self):
+        return not self._running.is_set()
+
+    def _wait_if_paused(self):
+        """ننتظر أثناء الإيقاف المؤقت، ولا نحسب مدته من وقت التفريغ في التقرير"""
+        if self._running.is_set():
+            return
+        paused_at = time.time()
+        while not self._running.wait(0.2):
+            pass
+        self._check_abort()
+        if self.start_time is not None:
+            self.start_time += time.time() - paused_at
 
     @property
     def aborted(self):
@@ -259,6 +286,7 @@ class TranscriptionThread(threading.Thread):
         last_percent = -1
 
         for segment in split_on_gaps(segments):
+            self._wait_if_paused()
             self._check_abort()
             if total_duration > 0:
                 percent = min(int((segment.end / total_duration) * 100), 100)

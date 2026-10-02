@@ -22,8 +22,13 @@ On first run, the program offers to open the Model Manager (Ctrl+D) with the mod
 2. Choose the right dictionary from the "Dictionary:" list next to the "Start Transcription" button (see Dictionaries).
 3. Press "Start Transcription".
 4. The processing window opens with focus on the progress line. Progress, the current step and the remaining time are announced automatically every 10%. Press `Ctrl+I` to hear them at any time, and `Esc` to cancel.
+   - Arrow down for the file (and, in folder mode, "file 3 of 10"), then the position reached in the recording, the elapsed time and the number of sentences.
+   - The "Text so far" box shows sentences as they are transcribed.
+   - **Pause** stops after the sentence being transcribed, and **Resume** continues from the same place. Paused time is not counted in the report.
+   - **Run in background** hides the window while transcription continues; progress shows in the status bar and window title. Press `Ctrl+I` to bring it back. When it finishes, the program's taskbar button flashes if you are in another program.
 5. Sentences appear in the results list as they are transcribed.
 6. When finished, a sound plays and the quality report opens. Close it with `Esc`; focus moves to the first result line.
+7. Every report is kept: open "Activity History" with `Ctrl+H`, choose any transcription, and press `Enter` (or "View report") to read its full report again. The history keeps the last 100 transcriptions.
 
 ## Reviewing and correcting results
 

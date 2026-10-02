@@ -399,5 +399,17 @@
   "n_terms_one": "1 term",
   "n_terms_many": "{n} terms",
   "about_version": "Version {version}",
-  "menu_guide": "User guide"
+  "menu_guide": "User guide",
+  "btn_pause_processing": "Pause",
+  "btn_resume_processing": "Resume",
+  "btn_processing_background": "Run in background",
+  "proc_live_text": "Text so far:",
+  "proc_batch": "file {current} of {total}",
+  "proc_position": "position {position} of {duration}",
+  "proc_elapsed": "{elapsed} elapsed",
+  "proc_paused": "Paused at {percent}%. Press Resume to continue.",
+  "status_processing_paused": "Transcription paused (it stops after the sentence being transcribed).",
+  "status_processing_resumed": "Transcription resumed.",
+  "status_processing_background": "Transcription continues in the background. Press Ctrl+I to show the processing window.",
+  "btn_view_report": "View report"
 }

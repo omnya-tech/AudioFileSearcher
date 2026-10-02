@@ -39,8 +39,10 @@ class HistoryDialog(wx.Dialog):
         sizer.Add(self.list_ctrl, 1, wx.EXPAND | wx.ALL, 10)
 
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.btn_report = icons.button(wx.Button(panel, label=self.i18n.get("btn_view_report")), "report", theme="light")
         self.btn_clear = icons.button(wx.Button(panel, label=self.i18n.get("btn_clear_history")), "clear", theme="light")
         btn_close = icons.button(wx.Button(panel, id=wx.ID_OK, label=self.i18n.get("btn_close")), "close", theme="light")
+        btn_sizer.Add(self.btn_report, 0, wx.ALL, 5)
         btn_sizer.Add(self.btn_clear, 0, wx.ALL, 5)
         btn_sizer.AddStretchSpacer(1)
         btn_sizer.Add(btn_close, 0, wx.ALL, 5)
@@ -48,15 +50,20 @@ class HistoryDialog(wx.Dialog):
 
         panel.SetSizer(sizer)
         self.btn_clear.Bind(wx.EVT_BUTTON, self.on_clear)
+        self.btn_report.Bind(wx.EVT_BUTTON, self.on_view_report)
+        # Enter على أي تفريغ يفتح تقريره
+        self.list_ctrl.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.on_view_report)
 
     def load_history(self):
-        history = self.logger.get_history(limit=100)
+        self.history = history = self.logger.get_history(limit=100)
         self.list_ctrl.DeleteAllItems()
         if not history:
             self.list_ctrl.InsertItem(0, self.i18n.get("history_no_records"))
             self.btn_clear.Disable()
+            self.btn_report.Disable()
             return
         self.btn_clear.Enable()
+        self.btn_report.Enable()
         for idx, entry in enumerate(history):
             timestamp = entry.get("timestamp", "")
             date_str = timestamp.replace("T", " ")[:16]
@@ -66,6 +73,16 @@ class HistoryDialog(wx.Dialog):
             self.list_ctrl.SetItem(idx, 3, entry.get("processing_time", {}).get("formatted", ""))
             self.list_ctrl.SetItem(idx, 4, str(entry.get("statistics", {}).get("total_words", "")))
             self.list_ctrl.SetItem(idx, 5, entry.get("status", ""))
+
+    def on_view_report(self, event):
+        index = self.list_ctrl.GetFirstSelected()
+        if not (0 <= index < len(getattr(self, "history", []))):
+            return
+        from gui.report_dialog import ReportDialog
+        dlg = ReportDialog(self, self.i18n, self.logger.load_report(self.history[index]))
+        dlg.ShowModal()
+        dlg.Destroy()
+        self.list_ctrl.SetFocus()
 
     def on_clear(self, event):
         dlg = wx.MessageDialog(self, self.i18n.get("msg_clear_history_confirm"), self.i18n.get("dialog_warning_title"), wx.YES_NO | wx.NO_DEFAULT | wx.ICON_WARNING)

@@ -447,3 +447,131 @@ def test_main_window_dictionary_choice(main_window, settings):
     main_window.cb_dictionary.SetStringSelection("اجتماعات")
     main_window.on_dictionary_chosen(None)
     assert dictionaries.active_name(settings) == "اجتماعات"
+
+
+# ---------- نافذة المعالجة: النص أولاً بأول، والإيقاف المؤقت، والعمل في الخلفية ----------
+
+def test_processing_dialog_live_text_and_details(main_window, i18n):
+    from gui.processing_dialog import ProcessingDialog, ROW_FILE, ROW_DETAILS
+    dlg = ProcessingDialog(main_window, i18n)
+    dlg.set_batch(2, 5)
+    dlg.update_progress(10, 100, "x", "lecture.mp3")
+    assert "lecture.mp3" in dlg.list_ctrl.GetItemText(ROW_FILE)
+    assert i18n.get("proc_batch", current=2, total=5) in dlg.list_ctrl.GetItemText(ROW_FILE)
+    dlg.add_segment("بسم الله", 2.5, 600)
+    dlg.add_segment("الحمد لله", 65, 600)
+    assert dlg.live_text.GetValue() == "بسم الله\nالحمد لله"
+    details = dlg.list_ctrl.GetItemText(ROW_DETAILS)
+    assert "01:05" in details and "10:00" in details and i18n.plural("n_lines", 2) in details
+    # ملف جديد في المجلد: نص جديد
+    dlg.set_batch(3, 5)
+    assert dlg.live_text.GetValue() == "" and dlg.segment_count == 0
+    # الاستكمال: الجمل السابقة تظهر أولاً
+    dlg.set_text(["أ", "ب"], 12)
+    assert dlg.live_text.GetValue() == "أ\nب" and dlg.segment_count == 2
+    dlg.Destroy()
+
+
+def test_processing_pause_resume_and_background(main_window, i18n):
+    from gui.processing_dialog import ProcessingDialog, ROW_PERCENT
+
+    class FakeThread:
+        paused = False
+        def pause(self): self.paused = True
+        def resume(self): self.paused = False
+        def is_alive(self): return True
+        aborted = False
+    main_window.transcription_thread = FakeThread()
+    main_window.processing_dialog = dlg = ProcessingDialog(main_window, i18n)
+    dlg.Show()
+    dlg.update_progress(40, 100, "x", "a.mp3")
+
+    dlg.on_pause(None)
+    assert main_window.transcription_thread.paused and dlg.is_paused
+    assert dlg.btn_pause.GetLabel() == i18n.get("btn_resume_processing")
+    assert "40%" in dlg.list_ctrl.GetItemText(ROW_PERCENT)
+    # التقدم لا يغيّر سطر الإيقاف (لا يُعلن تقدم والتفريغ متوقف)
+    dlg.update_progress(41, 100, "x", "a.mp3")
+    assert dlg.list_ctrl.GetItemText(ROW_PERCENT) == i18n.get("proc_paused", percent=40)
+    dlg.on_pause(None)
+    assert not main_window.transcription_thread.paused and not dlg.is_paused
+    assert dlg.btn_pause.GetLabel() == i18n.get("btn_pause_processing")
+
+    # العمل في الخلفية ثم Ctrl+I يعيد النافذة
+    dlg.on_background(None)
+    assert not dlg.IsShown()
+    assert main_window.status_bar.GetStatusText() == i18n.get("status_processing_background")
+    main_window.on_check_progress(None)
+    assert dlg.IsShown()
+    main_window.transcription_thread = None
+    main_window._close_processing_dialog()
+
+
+def test_thread_pause_waits_and_excludes_pause_time():
+    import threading
+    import time
+    from core.audio_processor import TranscriptionThread, TranscriptionAborted
+    t = TranscriptionThread.__new__(TranscriptionThread)
+    t._abort, t._running = threading.Event(), threading.Event()
+    t._running.set()
+    t.start_time = 100.0
+    t.pause()
+    assert t.paused
+    done = []
+    worker = threading.Thread(target=lambda: (t._wait_if_paused(), done.append(True)))
+    worker.start()
+    time.sleep(0.5)
+    assert not done          # ما زال متوقفاً
+    t.resume()
+    worker.join(2)
+    assert done and t.start_time > 100.3   # مدة الإيقاف لا تُحسب من وقت التفريغ
+    # الإلغاء أثناء الإيقاف يوقظه ويُنهي التفريغ
+    t.pause()
+    errors = []
+    def wait():
+        try:
+            t._wait_if_paused()
+        except TranscriptionAborted:
+            errors.append(True)
+    worker = threading.Thread(target=wait)
+    worker.start()
+    t.abort()
+    worker.join(2)
+    assert errors
+
+
+# ---------- التقارير في السجل ----------
+
+def test_reports_kept_and_opened_from_history(main_window, i18n, monkeypatch, tmp_path):
+    import os
+    from core import transcription_logger as tl
+    from gui.history_dialog import HistoryDialog
+    from gui.report_dialog import ReportDialog
+    logger = tl.TranscriptionLogger(i18n)
+    segments = [("", "بسم الله", 0.0, 2.0, [])]
+    logger.create_report("a.mp3", segments, 0, 5, "turbo", audio_duration=2,
+                         extra={"segment_details": [{"time": "00:00 - 00:02", "confidence": "90%", "status": "ok"}]})
+    entry = logger.get_history()[0]
+    assert "segment_details" not in entry and entry["report_file"]
+    assert logger.load_report(entry)["segment_details"][0]["confidence"] == "90%"
+    # تفريغ قديم بلا ملف تقرير: يُعرض ملخصه
+    assert logger.load_report({"file_name": "old.mp3"})["file_name"] == "old.mp3"
+
+    shown = []
+    monkeypatch.setattr(ReportDialog, "ShowModal", lambda self: shown.append(self.report) or wx.ID_OK)
+    dlg = HistoryDialog(main_window, i18n)
+    # الاختبارات تبدأ كل سجل فارغاً (conftest)، فنعطي النافذة السجل الذي أنشأنا فيه التقرير
+    dlg.logger = logger
+    dlg.load_history()
+    dlg.list_ctrl.Select(0)
+    dlg.on_view_report(None)
+    assert shown and shown[0]["segment_details"] and shown[0]["file_name"] == "a.mp3"
+    dlg.Destroy()
+
+    # السجل محدود: الأقدم يُحذف مع ملف تقريره، والمسح يحذف التقارير كلها
+    monkeypatch.setattr(tl, "HISTORY_LIMIT", 2)
+    for i in range(3):
+        logger.create_report(f"{i}.mp3", segments, 0, 5, "turbo", audio_duration=2)
+    assert len(os.listdir(logger.reports_dir)) == 2
+    logger.clear_history()
+    assert os.listdir(logger.reports_dir) == []
